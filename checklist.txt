@@ -1,0 +1,41 @@
+# Checklist de Implementações - Calculadora de Preços Personalizados
+
+- [x] Criação da lista inicial de tarefas no arquivo documentation/TASK_LIST.md
+- [x] Configuração da estrutura base: package.json, vite.config.ts, tsconfig.json, tailwind.config.js, postcss.config.js, index.html e vercel.json
+- [x] Criação dos modelos de tipos TypeScript (src/types/index.ts) e serviço de LocalStorage com backup/restauração JSON e dados padrão (src/services/storage.ts)
+- [x] Criação do utilitário de cálculos matemáticos e financeiros com transparência de custos, fórmulas de margem/markup e descontos por faixas (src/utils/calculations.ts)
+- [x] Desenvolvimento de componentes de UI customizados: Toast (ToastContext.tsx), CustomModal (CustomModal.tsx), CustomSelect (CustomSelect.tsx), CustomSwitch (CustomSwitch.tsx), CustomDateInput (CustomDateInput.tsx) e Tooltip (Tooltip.tsx)
+- [x] Desenvolvimento do Layout principal e navegação responsiva (Sidebar.tsx, MobileNav.tsx, Layout.tsx e index.css com desativação do resize de textarea e botão permanente de backup)
+- [x] Desenvolvimento do Dashboard com cards estatísticos, lucros estimados, vendas potenciais, listagem de produtos recentes e histórico (src/components/dashboard/Dashboard.tsx)
+- [x] Desenvolvimento da Calculadora de Custos e Precificação completa (CalculatorPage.tsx, CostSummaryCard.tsx, QuantityTiersSection.tsx) com cálculo proporcional de materiais, tinta, arte, mão de obra, perdas, margem vs. markup e faixas de atacado
+- [x] Desenvolvimento do Catálogo de Serviços e Produtos com busca, filtros de categoria, duplicação com 1 clique, modal de exclusão e visualização de ficha técnica detalhada (src/components/catalog/CatalogPage.tsx)
+- [x] Desenvolvimento do Histórico de Cálculos e Orçamentos com filtro de datas por CustomDateInput, busca textual, reabertura na calculadora e exclusão com modal (src/components/history/HistoryPage.tsx)
+- [x] Desenvolvimento da tela de Configurações, Parâmetros do Ateliê e Central de Backup com importação e exportação de arquivo JSON (src/components/settings/SettingsPage.tsx)
+- [x] Integração da aplicação principal com alternância de abas, sincronização reativa de dados e ToastProvider (src/App.tsx e src/main.tsx)
+- [x] Criação do README.md completo com instruções de execução local, testes e deploy gratuito na Vercel
+- [x] Conclusão e homologação de todas as etapas no arquivo documentation/TASK_LIST.md
+- [x] Inicialização do plano de tarefas para substituição de dados fictícios por dados e insumos reais de mercado de personalizados (documentation/TASK_LIST.md)
+- [x] Criação do catálogo de insumos reais de papelaria personalizada com preços de mercado reais do Brasil (src/data/realMaterials.ts)
+- [x] Inclusão de 4 produtos reais completos no catálogo (Folha de Adesivos, Topo de Bolo Luxo 3D, Caixa Milk e Kit de Etiquetas Escolares) com custos e insumos reais (src/services/storage.ts)
+- [x] Inclusão de seletor de insumos reais na Calculadora e remoção de placeholders fictícios (src/components/calculator/CalculatorPage.tsx)
+- [x] Aprimoramento do Catálogo com decomposição de custos reais e fichas técnicas detalhadas (src/components/catalog/CatalogPage.tsx)
+- [x] Atualização da tela de configurações com parâmetros reais de mercado e recarregamento de catálogo real (src/components/settings/SettingsPage.tsx)
+- [x] Conclusão da substituição de dados fictícios por dados e insumos 100% reais de papelaria personalizada
+- [x] Criação do plano de tarefas para remoção definitiva de todos os dados fictícios e simulados em todas as páginas (documentation/TASK_LIST.md)
+- [x] Remoção de todos os produtos pré-carregados mockados e definição do estado inicial 100% limpo no armazenamento local (src/services/storage.ts)
+- [x] Remoção de valores pré-preenchidos simulados na Calculadora, inicializando formulário e lista de materiais de forma 100% limpa (src/components/calculator/CalculatorPage.tsx)
+- [x] Remoção de faixas progressivas simuladas e números mágicos fixos, garantindo cadastro livre e real pela artesã (src/components/calculator/QuantityTiersSection.tsx e src/utils/calculations.ts)
+- [x] Adaptação do Dashboard para refletir estritamente dados reais sem valores simulados ou métricas fictícias (src/components/dashboard/Dashboard.tsx)
+- [x] Garantia de operação estritamente limpa e sem dados simulados no Catálogo e Histórico de Cálculos (src/components/catalog/CatalogPage.tsx e src/components/history/HistoryPage.tsx)
+- [x] Conclusão da remoção total de dados fictícios, mocks pré-gravados e valores simulados em todas as páginas do sistema
+- [x] Inicialização do plano de tarefas para identidade oficial Kelly Personalizados e campo de desconto percentual opcional (documentation/TASK_LIST.md)
+- [x] Atualização do nome oficial Kelly Personalizados e identidade visual em index.html, storage.ts, Sidebar.tsx, MobileNav.tsx e Dashboard.tsx
+- [x] Aprimoramento das fórmulas de precificação e tipos com suporte a desconto percentual opcional (0% se vazio) aplicado sobre o preço de venda e recálculo do lucro restante (src/types/index.ts e src/utils/calculations.ts)
+- [x] Integração do campo opcional de Desconto (%) na Calculadora com validação e exibição transparente do preço original, valor descontado e lucro restante no Card de Resumo (src/components/calculator/CalculatorPage.tsx e src/components/calculator/CostSummaryCard.tsx)
+- [x] Integração da tabela de atacado com recálculo automático de lucro e desconto por faixas de quantidade (src/components/calculator/QuantityTiersSection.tsx)
+- [x] Integração do campo de desconto e exibição de preço original, percentual e lucro restante no Catálogo e no modal de Ficha Técnica (src/components/catalog/CatalogPage.tsx)
+- [x] Integração dos detalhes de desconto nos cards e no modal de detalhamento do Histórico de Cálculos (src/components/history/HistoryPage.tsx)
+- [x] Atualização da tela de Configurações para restauração de parâmetros padrão da Kelly Personalizados (src/components/settings/SettingsPage.tsx)
+- [x] Atualização completa do README.md com a marca Kelly Personalizados e manual do campo opcional de Desconto (%)
+- [x] Conclusão e homologação de todas as tarefas da solicitação no arquivo documentation/TASK_LIST.md
+- [x] Inclusão da importação do ícone Sparkles no componente CalculatorPage.tsx e inicialização da base de conhecimento documentation/continuous_learning_skills.md

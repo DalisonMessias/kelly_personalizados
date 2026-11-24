@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Regra obrigatória: Desativar aumento manual no canto de qualquer textarea */
+  textarea {
+    resize: none !important;
+  }
+
+  /* Barra de rolagem suave e fina */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+  }
+}
+
+/* Utilitários visuais para consistência */
+.card-base {
+  @apply bg-white rounded-2xl border border-slate-100 shadow-sm transition-all;
+}
+
+.input-base {
+  @apply w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all placeholder:text-slate-400;
+}
