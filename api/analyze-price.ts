@@ -146,7 +146,7 @@ Retorne exclusivamente JSON válido: {"prompt":"","melhorias":[],"formato":"","a
       const model = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
       const response = await fetch(GROQ_URL, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${apiKey}`,
         body: JSON.stringify({
           model,
           temperature: 0.3,
@@ -198,7 +198,7 @@ Retorne somente JSON: {"descricao":"","materiais":[{"nome":"","quantidade":1,"cu
       const model = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
       const response = await fetch(GROQ_URL, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${apiKey}`,
         body: JSON.stringify({
           model,
           temperature: 0.2,
