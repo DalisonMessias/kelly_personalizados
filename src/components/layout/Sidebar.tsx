@@ -7,12 +7,16 @@ import {
   Settings, 
   DownloadCloud, 
   HeartHandshake,
-  Sparkles
+  Sparkles,
+  BrainCircuit,
+  Users,
+  ShoppingBag,
+  WandSparkles
 } from 'lucide-react';
 import { storageService } from '../../services/storage';
 import { useToast } from '../ui/Toast';
 
-export type NavTab = 'dashboard' | 'calculator' | 'catalog' | 'history' | 'settings';
+export type NavTab = 'dashboard' | 'calculator' | 'catalog' | 'history' | 'assistant' | 'art-prompt' | 'clients' | 'store-products' | 'settings';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -32,7 +36,11 @@ export function Sidebar({ currentTab, onSelectTab, shopName }: SidebarProps) {
     { id: 'dashboard', label: 'Painel Geral', icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: 'calculator', label: 'Calculadora de Custos', icon: <Calculator className="w-5 h-5" /> },
     { id: 'catalog', label: 'Catálogo de Serviços', icon: <FolderKanban className="w-5 h-5" /> },
+    { id: 'store-products', label: 'Catálogo de Produtos', icon: <ShoppingBag className="w-5 h-5" /> },
     { id: 'history', label: 'Histórico de Cálculos', icon: <History className="w-5 h-5" /> },
+    { id: 'assistant', label: 'Assistente IA', icon: <BrainCircuit className="w-5 h-5" /> },
+    { id: 'art-prompt', label: 'Assistente de Artes', icon: <WandSparkles className="w-5 h-5" /> },
+    { id: 'clients', label: 'Clientes', icon: <Users className="w-5 h-5" /> },
     { id: 'settings', label: 'Configurações e Parâmetros', icon: <Settings className="w-5 h-5" /> },
   ];
 

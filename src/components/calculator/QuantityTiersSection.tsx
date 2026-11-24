@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { CurrencyInput } from '../ui/CurrencyInput';
+import { PercentInput } from '../ui/PercentInput';
 import { 
   Plus, 
   Trash2, 
@@ -126,15 +128,11 @@ export function QuantityTiersSection({
           <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
             % Desconto da Faixa
           </label>
-          <input
-            type="number"
-            min={0}
+          <PercentInput
+            value={newDiscount}
+            onChange={(value) => setNewDiscount(value || 0)}
             max={99}
-            step={0.5}
-            value={newDiscount || ''}
-            onChange={(e) => setNewDiscount(Number(e.target.value))}
-            className="input-base text-sm py-2"
-            placeholder="Ex: 10"
+            className="input-base pr-10 text-sm py-2"
           />
         </div>
 
@@ -180,13 +178,10 @@ export function QuantityTiersSection({
                     {tier.quantity} {tier.quantity === 1 ? 'unidade' : 'unidades'}
                   </td>
                   <td className="py-3 px-3">
-                    <input
-                      type="number"
-                      step={0.1}
-                      min={0}
+                    <CurrencyInput
                       value={tier.unitPrice}
-                      onChange={(e) => handleUpdateTier(tier.id, { unitPrice: Number(e.target.value) })}
-                      className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:border-brand-500"
+                      onChange={(value) => handleUpdateTier(tier.id, { unitPrice: value })}
+                      className="w-28 px-2 py-1 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:border-brand-500 text-right"
                     />
                   </td>
                   <td className="py-3 px-3 font-extrabold text-slate-900">

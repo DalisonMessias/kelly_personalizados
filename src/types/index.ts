@@ -164,6 +164,230 @@ export interface CalculationRecord {
   quantityTiers?: QuantityTier[];
 }
 
+export interface AIPriceAnalysis {
+  preco_sugerido: number;
+  preco_minimo: number;
+  lucro_estimado: number;
+  margem_lucro: number;
+  avaliacao: string;
+  justificativa: string;
+  sugestao_quantidade: string;
+}
+
+export interface ChatProposalMaterial {
+  nome: string;
+  quantidade: number;
+  unidade: string;
+  custo_individual: number;
+}
+
+export interface ChatServiceProposal {
+  nome: string;
+  descricao: string;
+  materiais: ChatProposalMaterial[];
+  custo_total_materiais: number;
+  custo_tinta: number;
+  custo_arte: number;
+  tempo_producao: number;
+  unidade_tempo: 'minutes' | 'hours';
+  custo_mao_de_obra: number;
+  outros_custos: number;
+  desperdicio_percentual: number;
+  quantidade_produzida: number;
+  desconto_percentual: number;
+  preco_sugerido: number;
+  observacoes: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  proposal?: ChatServiceProposal;
+  createdAt: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceOrder {
+  id: string;
+  number: string;
+  proposal: ChatServiceProposal;
+  priceFinal: number;
+  createdAt: string;
+  observations: string;
+}
+
+export type QuoteStatus = 'pendente' | 'enviado' | 'aprovado' | 'recusado' | 'expirado';
+
+export interface Customer {
+  id: string;
+  name: string;
+  nickname?: string;
+  phone: string;
+  whatsapp: string;
+  observations: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QuoteItem {
+  id: string;
+  productId?: string;
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface QuoteAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  description: string;
+  createdAt: string;
+}
+
+export interface QuoteTag {
+  id: string;
+  name: string;
+  color: string;
+  custom?: boolean;
+}
+
+export interface CustomerQuote {
+  id: string;
+  number: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  items: QuoteItem[];
+  subtotal: number;
+  discountPercent: number;
+  discountAmount: number;
+  total: number;
+  observations: string;
+  whatsappMessage: string;
+  validUntil: string;
+  status: QuoteStatus;
+  attachmentIds: string[];
+  attachments: QuoteAttachment[];
+  tagIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type StoreProductStatus = 'ativo' | 'inativo';
+export type PersonalizationFieldType = 'texto' | 'numero' | 'selecao' | 'multipla_escolha' | 'sim_nao';
+
+export interface PersonalizationOption {
+  id: string;
+  name: string;
+  type: PersonalizationFieldType;
+  required: boolean;
+  values: string[];
+  priceAdjustment: number;
+  active: boolean;
+}
+
+export interface StoreProductAddon {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  active: boolean;
+}
+
+export interface StoreProduct {
+  id: string;
+  name: string;
+  publicDescription: string;
+  internalDescription: string;
+  category: ProductCategory;
+  imageIds: string[];
+  linkedServiceId?: string;
+  linkedCalculationId?: string;
+  minimumQuantity: number;
+  productionDeadline: string;
+  salePrice: number;
+  marginPercent: number;
+  productionCost: number;
+  laborCost: number;
+  materialCost: number;
+  otherCosts: number;
+  estimatedProductionTime: number;
+  timeUnit: TimeUnit;
+  status: StoreProductStatus;
+  showInFutureStore: boolean;
+  observations: string;
+  personalizationOptions: PersonalizationOption[];
+  addons: StoreProductAddon[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoreCategory {
+  id: string;
+  name: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FutureOrder {
+  id: string;
+  customerId?: string;
+  customerName: string;
+  items: Array<{
+    productId: string;
+    quantity: number;
+    personalization: Record<string, string | number | boolean | string[]>;
+    addonIds: string[];
+    unitPrice: number;
+    subtotal: number;
+  }>;
+  subtotal: number;
+  total: number;
+  status: 'novo' | 'em_analise' | 'confirmado' | 'em_producao' | 'pronto' | 'entregue' | 'cancelado';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GeneratedArtPrompt {
+  prompt: string;
+  melhorias: string[];
+  formato: string;
+  alerta: string;
+}
+
+export interface CalculatorFillEstimate {
+  descricao: string;
+  materiais: Array<{ nome: string; quantidade: number; custo: number }>;
+  custo_tinta: number;
+  custo_arte: number;
+  tempo_producao: number;
+  unidade_tempo: 'minutes' | 'hours';
+  custo_mao_de_obra: number;
+  embalagem: number;
+  energia: number;
+  outros_custos: number;
+  desperdicio_percentual: number;
+  quantidade_unidades: number;
+  preco_sugerido: number;
+  lucro_estimado: number;
+  margem_lucro: number;
+  estimativas: string[];
+  observacoes: string;
+}
+
 export interface AppSettings {
   shopName: string;
   ownerName: string;
@@ -181,4 +405,12 @@ export interface AppBackupData {
   products: ProductService[];
   calculations: CalculationRecord[];
   settings: AppSettings;
+  conversations?: ChatConversation[];
+  serviceOrders?: ServiceOrder[];
+  customers?: Customer[];
+  quotes?: CustomerQuote[];
+  quoteTags?: QuoteTag[];
+  storeProducts?: StoreProduct[];
+  storeCategories?: StoreCategory[];
+  futureOrders?: FutureOrder[];
 }

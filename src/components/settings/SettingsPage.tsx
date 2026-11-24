@@ -17,6 +17,8 @@ import { AppSettings } from '../../types';
 import { storageService, DEFAULT_SETTINGS } from '../../services/storage';
 import { CustomModal } from '../ui/CustomModal';
 import { useToast } from '../ui/Toast';
+import { CurrencyInput } from '../ui/CurrencyInput';
+import { PercentInput } from '../ui/PercentInput';
 
 interface SettingsPageProps {
   onRefreshAllData: () => void;
@@ -217,12 +219,9 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
               Valor da Hora de Trabalho (R$/hora)
             </label>
-            <input
-              type="number"
-              step={1}
-              min={0}
+            <CurrencyInput
               value={settings.defaultHourlyRate}
-              onChange={(e) => setSettings({ ...settings, defaultHourlyRate: Number(e.target.value) })}
+              onChange={(value) => setSettings({ ...settings, defaultHourlyRate: value })}
               className="input-base font-semibold"
             />
             <span className="text-[11px] text-slate-400 mt-1 block">
@@ -234,12 +233,9 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
               Custo de Tinta por Folha Impressa (R$)
             </label>
-            <input
-              type="number"
-              step={0.01}
-              min={0}
+            <CurrencyInput
               value={settings.defaultInkCostPerSheet}
-              onChange={(e) => setSettings({ ...settings, defaultInkCostPerSheet: Number(e.target.value) })}
+              onChange={(value) => setSettings({ ...settings, defaultInkCostPerSheet: value })}
               className="input-base font-semibold"
             />
             <span className="text-[11px] text-slate-400 mt-1 block">
@@ -251,14 +247,11 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
               Margem de Lucro Padrão (% sobre a venda)
             </label>
-            <input
-              type="number"
-              step={1}
-              min={1}
-              max={90}
+            <PercentInput
               value={settings.defaultMarginPercentage}
-              onChange={(e) => setSettings({ ...settings, defaultMarginPercentage: Number(e.target.value) })}
-              className="input-base font-semibold"
+              onChange={(value) => setSettings({ ...settings, defaultMarginPercentage: value || 0 })}
+              max={90}
+              className="input-base pr-10 font-semibold"
             />
             <span className="text-[11px] text-slate-400 mt-1 block">
               Recomendação SEBRAE para papelaria personalizada: 40% a 50%.
@@ -269,14 +262,11 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
               Margem de Perdas / Desperdício Padrão (%)
             </label>
-            <input
-              type="number"
-              step={1}
-              min={0}
-              max={40}
+            <PercentInput
               value={settings.defaultWastePercentage}
-              onChange={(e) => setSettings({ ...settings, defaultWastePercentage: Number(e.target.value) })}
-              className="input-base font-semibold"
+              onChange={(value) => setSettings({ ...settings, defaultWastePercentage: value || 0 })}
+              max={40}
+              className="input-base pr-10 font-semibold"
             />
             <span className="text-[11px] text-slate-400 mt-1 block">
               Média do setor: 8% para cobrir folhas de teste ou erros de corte.

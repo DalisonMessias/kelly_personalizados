@@ -8,7 +8,11 @@ import {
   History, 
   Settings, 
   DownloadCloud,
-  Sparkles
+  Sparkles,
+  BrainCircuit,
+  Users,
+  ShoppingBag,
+  WandSparkles
 } from 'lucide-react';
 import { NavTab } from './Sidebar';
 import { storageService } from '../../services/storage';
@@ -39,7 +43,7 @@ export function MobileNav({ currentTab, onSelectTab, shopName }: MobileNavProps)
   return (
     <>
       {/* Header Fixo Mobile com Identidade Kelly Personalizados */}
-      <header className="lg:hidden sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100 px-4 py-3 flex items-center justify-between">
+      <header className="lg:hidden sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-pink-100 px-3 py-2.5 flex items-center justify-between safe-area-pb">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-pink-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
             <Sparkles className="w-4 h-4" />
@@ -109,7 +113,11 @@ export function MobileNav({ currentTab, onSelectTab, shopName }: MobileNavProps)
                 { id: 'dashboard' as NavTab, label: 'Painel Geral', icon: <LayoutDashboard className="w-5 h-5" /> },
                 { id: 'calculator' as NavTab, label: 'Calculadora de Custos', icon: <Calculator className="w-5 h-5" /> },
                 { id: 'catalog' as NavTab, label: 'Catálogo de Serviços', icon: <FolderKanban className="w-5 h-5" /> },
+                { id: 'store-products' as NavTab, label: 'Catálogo de Produtos', icon: <ShoppingBag className="w-5 h-5" /> },
                 { id: 'history' as NavTab, label: 'Histórico de Cálculos', icon: <History className="w-5 h-5" /> },
+                { id: 'assistant' as NavTab, label: 'Assistente IA', icon: <BrainCircuit className="w-5 h-5" /> },
+                { id: 'art-prompt' as NavTab, label: 'Assistente de Artes', icon: <WandSparkles className="w-5 h-5" /> },
+                { id: 'clients' as NavTab, label: 'Clientes', icon: <Users className="w-5 h-5" /> },
                 { id: 'settings' as NavTab, label: 'Configurações e Parâmetros', icon: <Settings className="w-5 h-5" /> },
               ].map((item) => {
                 const isActive = currentTab === item.id;
@@ -154,7 +162,7 @@ export function MobileNav({ currentTab, onSelectTab, shopName }: MobileNavProps)
       )}
 
       {/* Barra de Navegação Inferior para Mobile */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-100 px-2 py-1.5 flex items-center justify-around shadow-lg">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-pink-100 px-1 pb-[env(safe-area-inset-bottom)] pt-1.5 flex items-center justify-around shadow-[0_-4px_18px_rgba(15,23,42,0.08)]">
         {navItems.map((item) => {
           const isActive = currentTab === item.id;
           return (

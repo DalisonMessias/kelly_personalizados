@@ -3,9 +3,35 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-slate-50 text-slate-800 antialiased font-sans;
+    @apply bg-white text-slate-900 antialiased font-sans;
     -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    touch-action: manipulation;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  @media (min-width: 640px) {
+    input,
+    textarea,
+    select {
+      font-size: 14px;
+    }
   }
 
   /* Regra obrigatória: Desativar aumento manual no canto de qualquer textarea */
@@ -30,9 +56,15 @@
 
 /* Utilitários visuais para consistência */
 .card-base {
-  @apply bg-white rounded-2xl border border-slate-100 shadow-sm transition-all;
+  @apply bg-white rounded-2xl border border-pink-100/80 shadow-[0_4px_18px_rgba(15,23,42,0.04)] transition-all;
 }
 
 .input-base {
-  @apply w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all placeholder:text-slate-400;
+  @apply w-full min-h-11 px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all placeholder:text-slate-400;
+}
+
+@media (max-width: 639px) {
+  .card-base {
+    @apply rounded-xl;
+  }
 }

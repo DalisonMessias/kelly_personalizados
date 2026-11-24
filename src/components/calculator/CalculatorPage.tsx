@@ -20,6 +20,13 @@ import {
   Sparkles,
   ShoppingBag,
   PlusCircle,
+  BrainCircuit,
+  RefreshCw,
+  AlertTriangle as AlertTriangleIcon,
+  Sparkles as SparklesIcon,
+  Copy,
+  FileText,
+  WandSparkles,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -34,6 +41,7 @@ import {
   ProductService, 
   QuantityTier, 
   SimpleMaterial,
+  AIPriceAnalysis,
   WasteConfig 
 } from '../../types';
 import { 
@@ -52,19 +60,28 @@ import { CustomModal } from '../ui/CustomModal';
 import { Tooltip } from '../ui/Tooltip';
 import { useToast } from '../ui/Toast';
 import { NavTab } from '../layout/Sidebar';
+import { Customer } from '../../types';
+import { CurrencyInput } from '../ui/CurrencyInput';
+import { PercentInput } from '../ui/PercentInput';
 
 interface CalculatorPageProps {
   initialProduct?: ProductService | null;
+  isDuplicating?: boolean;
   onClearInitialProduct?: () => void;
   onNavigate: (tab: NavTab) => void;
   onProductSaved: (product: ProductService) => void;
+  initialCustomerId?: string;
+  onCreateQuote?: (product: ProductService, customerId?: string) => void;
 }
 
 export function CalculatorPage({
   initialProduct,
+  isDuplicating = false,
   onClearInitialProduct,
   onNavigate,
   onProductSaved,
+  initialCustomerId,
+  onCreateQuote,
 }: CalculatorPageProps) {
   const { success, info, warning } = useToast();
   const settings = storageService.getSettings();
@@ -172,6 +189,17 @@ export function CalculatorPage({
     initialProduct?.quantityTiers || []
   );
 
+  const [customers] = useState<Customer[]>(() => storageService.getCustomers());
+  const [selectedCustomerId, setSelectedCustomerId] = useState(initialCustomerId || '');
+
+  const [aiAnalysis, setAiAnalysis] = useState<AIPriceAnalysis | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiFillName, setAiFillName] = useState(productName);
+  const [isAiFillLoading, setIsAiFillLoading] = useState(false);
+  const [aiFillError, setAiFillError] = useState('');
+  const [aiFillResult, setAiFillResult] = useState<any | null>(null);
+
   // Modais de confirmação e seleção de insumos
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isDeleteMatModalOpen, setIsDeleteMatModalOpen] = useState(false);
@@ -179,6 +207,33 @@ export function CalculatorPage({
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
   const [presetSearch, setPresetSearch] = useState('');
   const [presetCategory, setPresetCategory] = useState<string>('todos');
+
+  // Mantém todos os campos sincronizados ao trocar o cálculo carregado no histórico.
+  useEffect(() => {
+    if (!initialProduct) return;
+
+    setProductName(initialProduct.name || '');
+    setCategory(initialProduct.category || 'adesivos');
+    setDescription(initialProduct.description || '');
+    setSheetCount(initialProduct.sheetCount || 1);
+    setSimpleMaterials(
+      initialProduct.simpleMaterials && initialProduct.simpleMaterials.length > 0
+        ? initialProduct.simpleMaterials
+        : [makeBlankSimple()]
+    );
+    setMaterials(initialProduct.materials || []);
+    setInk(initialProduct.ink);
+    setArt(initialProduct.art);
+    setLabor(initialProduct.labor);
+    setOtherCosts(initialProduct.otherCosts);
+    setWaste(initialProduct.waste);
+    setPricing(initialProduct.pricing);
+    setQuantityTiers(initialProduct.quantityTiers || []);
+  }, [initialProduct]);
+
+  useEffect(() => {
+    setSelectedCustomerId(initialCustomerId || '');
+  }, [initialCustomerId]);
 
   // Sincroniza quantidade com folhas de tinta
   useEffect(() => {
@@ -199,6 +254,186 @@ export function CalculatorPage({
       sheetCount
     );
   }, [materials, simpleMaterials, ink, art, labor, otherCosts, waste, pricing, sheetCount]);
+
+  const requestAiAnalysis = async () => {
+    setIsAiLoading(true);
+    setAiError('');
+
+    const payload = {
+      produto: {
+        nome: productName.trim(),
+        descricao: description.trim(),
+        categoria: category,
+        quantidade_produzida: sheetCount,
+      },
+      materiais: simpleMaterials
+        .filter((item) => item.name.trim() !== '' || item.cost > 0)
+        .map((item) => ({ nome: item.name.trim(), custo: Number(item.cost || 0) })),
+      insumos_proporcionais: materials.map((item) => ({
+        nome: item.name,
+        custo_calculado: item.calculatedCost,
+      })),
+      custo_total_materiais: calculationResult.materialsCost,
+      custo_tinta: calculationResult.inkCost,
+      custo_arte: calculationResult.artCost,
+      tempo_producao: {
+        tempo: labor.timeSpent,
+        unidade: labor.timeUnit,
+      },
+      valor_mao_de_obra: calculationResult.laborCost,
+      outros_custos: calculationResult.otherCosts,
+      percentual_desperdicio: waste.percentage,
+      custo_desperdicio: calculationResult.wasteCost,
+      custo_total_producao: calculationResult.totalServiceCost,
+      custo_por_unidade: calculationResult.unitCost,
+      preco_calculado_sistema: calculationResult.finalSalePrice,
+      preco_original_sistema: calculationResult.originalSalePrice,
+      desconto_percentual: calculationResult.discountPercent,
+      valor_desconto: calculationResult.discountAmount,
+      lucro_estimado: calculationResult.estimatedProfit,
+      margem_lucro_calculada: calculationResult.profitMarginPercent,
+      faixas_quantidade: quantityTiers,
+    };
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 25000);
+
+      const response = await fetch('/api/analyze-price', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      window.clearTimeout(timeoutId);
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Não foi possível concluir a análise inteligente.');
+      }
+
+      setAiAnalysis(data.analysis);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setAiError('A análise excedeu o tempo limite. Tente novamente em alguns segundos.');
+      } else {
+        setAiError(error instanceof Error ? error.message : 'Falha ao conectar à análise inteligente.');
+      }
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const buildCurrentProductForQuote = (): ProductService => ({
+    id: initialProduct?.id || `quote-product-${Date.now()}`,
+    name: productName.trim(),
+    category,
+    description: description.trim(),
+    sheetCount,
+    createdAt: initialProduct?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    simpleMaterials: simpleMaterials.filter((material) => material.name.trim() !== '' || material.cost > 0),
+    materials,
+    ink,
+    art,
+    labor,
+    otherCosts,
+    waste,
+    pricing,
+    quantityTiers,
+    calculationResult,
+  });
+
+  const requestCalculatorFill = async () => {
+    const name = aiFillName.trim();
+    if (!name) {
+      setAiFillError('Informe o nome do produto ou serviço.');
+      return;
+    }
+
+    setIsAiFillLoading(true);
+    setAiFillError('');
+    setAiFillResult(null);
+
+    try {
+      const response = await fetch('/api/analyze-price', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'calculator_fill', nome_produto: name }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível gerar a estimativa.');
+      setAiFillResult(data.calculatorFill || null);
+    } catch (error) {
+      setAiFillError(error instanceof Error ? error.message : 'Falha ao preencher com IA.');
+    } finally {
+      setIsAiFillLoading(false);
+    }
+  };
+
+  const applyCalculatorFill = () => {
+    if (!aiFillResult) return;
+
+    setProductName(aiFillName.trim());
+    setDescription(aiFillResult.descricao || description);
+    setSheetCount(Math.max(1, Number(aiFillResult.quantidade_unidades) || 1));
+    setInk((current) => ({
+      ...current,
+      mode: 'per_job',
+      costPerJob: Math.max(0, Number(aiFillResult.custo_tinta) || 0),
+    }));
+    setArt((current) => ({
+      ...current,
+      mode: 'full',
+      totalArtPrice: Math.max(0, Number(aiFillResult.custo_arte) || 0),
+    }));
+    setLabor((current) => ({
+      ...current,
+      timeSpent: Math.max(0, Number(aiFillResult.tempo_producao) || 0),
+      timeUnit: aiFillResult.unidade_tempo === 'hours' ? 'hours' : 'minutes',
+      hourlyRate: Math.max(0, Number(aiFillResult.custo_mao_de_obra) || 0),
+    }));
+    setOtherCosts((current) => ({
+      ...current,
+      packaging: Math.max(0, Number(aiFillResult.embalagem) || 0),
+      electricity: Math.max(0, Number(aiFillResult.energia) || 0),
+      customExpenses: [],
+    }));
+    setWaste({ percentage: Math.max(0, Math.min(100, Number(aiFillResult.desperdicio_percentual) || 0)) });
+
+    const estimatedMaterials = Array.isArray(aiFillResult.materiais)
+      ? aiFillResult.materiais
+          .map((material: any) => ({
+            name: String(material.nome || '').trim(),
+            cost: Math.max(0, Number(material.custo) || 0),
+          }))
+          .filter((material: { name: string; cost: number }) =>
+            material.name.length > 1 && !/^x+$/i.test(material.name)
+          )
+          .map((material: { name: string; cost: number }, index: number) => ({
+            id: `ai-material-${Date.now()}-${index}`,
+            ...material,
+          }))
+      : [];
+    setSimpleMaterials(estimatedMaterials.length > 0 ? estimatedMaterials : [makeBlankSimple()]);
+
+    setPricing((current) => ({
+      ...current,
+      method: 'margin',
+      targetMargin: 40,
+      manualPrice: 0,
+    }));
+    setAiFillResult(null);
+    setAiFillError('Campos preenchidos como estimativa. Revise antes de salvar.');
+  };
+
+  const handleCreateQuoteFromCalculator = () => {
+    if (!productName.trim()) {
+      warning('Informe o serviço', 'Digite o nome do produto ou serviço antes de criar o orçamento.');
+      return;
+    }
+    onCreateQuote?.(buildCurrentProductForQuote(), selectedCustomerId || undefined);
+  };
 
   // Adicionar Insumo do Catálogo Real
   const handleSelectPresetMaterial = (preset: PresetMaterial) => {
@@ -283,12 +518,14 @@ export function CalculatorPage({
     }
 
     const productToSave: ProductService = {
-      id: initialProduct?.id || `prod-${Date.now()}`,
+      id: isDuplicating
+        ? `prod-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        : (initialProduct?.id || `prod-${Date.now()}`),
       name: productName.trim(),
       category,
       description: description.trim(),
       sheetCount,
-      createdAt: initialProduct?.createdAt || new Date().toISOString(),
+      createdAt: isDuplicating ? new Date().toISOString() : (initialProduct?.createdAt || new Date().toISOString()),
       updatedAt: new Date().toISOString(),
       simpleMaterials: simpleMaterials.filter((m) => m.name.trim() !== '' || m.cost > 0),
       materials,
@@ -331,6 +568,14 @@ export function CalculatorPage({
       sheetCount,
       calculationResult,
       simpleMaterials: simpleMaterials.filter((m) => m.name.trim() !== '' || m.cost > 0),
+      materials,
+      ink,
+      art,
+      labor,
+      otherCosts,
+      waste,
+      pricing,
+      quantityTiers,
       notes: description.trim() || `Orçamento calculado em ${new Date().toLocaleDateString('pt-BR')}.`,
     });
 
@@ -421,11 +666,44 @@ export function CalculatorPage({
             <Tooltip content="Insira seus materiais e tempo de produção para calcular o custo exato e definir o melhor preço de venda." />
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            {initialProduct ? `Editando o produto: "${initialProduct.name}"` : 'Preencha os dados reais do seu serviço para calcular o custo, o preço ideal e o lucro restante.'}
+            {isDuplicating
+              ? 'Cópia iniciada a partir de um serviço existente. O original continuará intacto.'
+              : (initialProduct ? `Editando o produto: "${initialProduct.name}"` : 'Preencha os dados reais do seu serviço para calcular o custo, o preço ideal e o lucro restante.')}
           </p>
+          {isDuplicating && (
+            <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-pink-50 border border-pink-200 text-brand-700 text-[11px] font-bold">
+              <Copy className="w-3 h-3" />
+              Formulário iniciado por duplicação
+            </span>
+          )}
         </div>
 
         <div className="flex items-center flex-wrap gap-2.5">
+          {customers.length > 0 && (
+            <select
+              value={selectedCustomerId}
+              onChange={(event) => setSelectedCustomerId(event.target.value)}
+              className="min-h-10 px-3 py-2 rounded-xl border border-pink-200 bg-pink-50 text-xs font-semibold text-slate-700"
+              aria-label="Cliente do orçamento"
+            >
+              <option value="">Cliente opcional</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>{customer.name}</option>
+              ))}
+            </select>
+          )}
+
+          {onCreateQuote && (
+            <button
+              type="button"
+              onClick={handleCreateQuoteFromCalculator}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-pink-200 bg-pink-50 text-brand-700 hover:bg-pink-100 font-bold text-xs transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Criar orçamento</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setIsResetModalOpen(true)}
@@ -504,14 +782,14 @@ export function CalculatorPage({
 
               <div className="sm:col-span-2">
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
-                  Observações / Descrição do Serviço
+                  Descrição do produto ou serviço
                 </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={2}
                   className="input-base"
-                  placeholder="Anotações sobre tipo de papel, medidas, cores, detalhes do corte ou requisitos do cliente..."
+                  placeholder="Ex: Topo de bolo infantil personalizado com nome, idade, personagens, impressão colorida e acabamento em papel fotográfico."
                 />
               </div>
             </div>
@@ -548,9 +826,9 @@ export function CalculatorPage({
               {simpleMaterials.map((mat, index) => (
                 <div
                   key={mat.id}
-                  className="flex items-center gap-3 p-3 rounded-2xl border border-slate-100 bg-slate-50/60 group"
+                  className="grid grid-cols-[24px_minmax(0,1fr)_36px] sm:flex sm:items-center gap-2 sm:gap-3 p-3 rounded-2xl border border-slate-100 bg-slate-50/60 group"
                 >
-                  <span className="text-[11px] font-bold text-slate-400 w-5 shrink-0 text-center">
+                  <span className="text-[11px] font-bold text-slate-400 w-5 shrink-0 text-center self-center">
                     {index + 1}
                   </span>
 
@@ -559,28 +837,21 @@ export function CalculatorPage({
                     value={mat.name}
                     onChange={(e) => handleUpdateSimpleMaterial(mat.id, 'name', e.target.value)}
                     placeholder="Nome do material (ex: Folha de adesivo)"
-                    className="flex-1 min-w-0 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-brand-500 transition-colors"
+                    className="min-w-0 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-brand-500 transition-colors"
                   />
 
-                  <div className="relative shrink-0 w-32">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
-                      R$
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={mat.cost || ''}
-                      onChange={(e) => handleUpdateSimpleMaterial(mat.id, 'cost', Number(e.target.value))}
-                      placeholder="0,00"
-                      className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-brand-700 placeholder:text-slate-400 focus:outline-none focus:border-brand-500 transition-colors text-right"
+                  <div className="relative col-start-2 sm:col-auto sm:shrink-0 sm:w-36">
+                    <CurrencyInput
+                      value={mat.cost || 0}
+                      onChange={(value) => handleUpdateSimpleMaterial(mat.id, 'cost', value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-brand-700 placeholder:text-slate-400 focus:outline-none focus:border-brand-500 transition-colors text-right"
                     />
                   </div>
 
                   <button
                     type="button"
                     onClick={() => handleRemoveSimpleMaterial(mat.id)}
-                    className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                    className="row-start-1 col-start-3 sm:col-auto p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors shrink-0 justify-self-end"
                     title="Remover material"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -695,14 +966,10 @@ export function CalculatorPage({
                         <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
                           Preço Compra
                         </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          value={mat.purchasePrice || ''}
-                          onChange={(e) => handleUpdateMaterial(mat.id, { purchasePrice: Number(e.target.value) })}
+                        <CurrencyInput
+                          value={mat.purchasePrice || 0}
+                          onChange={(value) => handleUpdateMaterial(mat.id, { purchasePrice: value })}
                           className="input-base text-xs py-2 font-semibold"
-                          placeholder="R$ 0,00"
                         />
                       </div>
 
@@ -773,14 +1040,9 @@ export function CalculatorPage({
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                     Custo de tinta por folha (R$)
                   </label>
-                  <input
-                    type="number"
-                    step={0.01}
-                    min={0}
-                    value={ink.costPerSheet || ''}
-                    onChange={(e) => setInk({ ...ink, costPerSheet: Number(e.target.value) })}
-                    className="input-base"
-                    placeholder="Ex: 0.15"
+                  <CurrencyInput
+                    value={ink.costPerSheet || 0}
+                    onChange={(value) => setInk({ ...ink, costPerSheet: value })}
                   />
                   <span className="text-[11px] text-slate-400 mt-1 block">
                     Total para {sheetCount} folhas: <strong>{formatCurrency(ink.costPerSheet * sheetCount)}</strong>
@@ -791,14 +1053,9 @@ export function CalculatorPage({
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                     Valor fixo de tinta no serviço (R$)
                   </label>
-                  <input
-                    type="number"
-                    step={0.1}
-                    min={0}
-                    value={ink.costPerJob || ''}
-                    onChange={(e) => setInk({ ...ink, costPerJob: Number(e.target.value) })}
-                    className="input-base"
-                    placeholder="R$ 0,00"
+                  <CurrencyInput
+                    value={ink.costPerJob || 0}
+                    onChange={(value) => setInk({ ...ink, costPerJob: value })}
                   />
                 </div>
               )}
@@ -825,14 +1082,9 @@ export function CalculatorPage({
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                     Valor da Arte (R$)
                   </label>
-                  <input
-                    type="number"
-                    step={1}
-                    min={0}
-                    value={art.totalArtPrice || ''}
-                    onChange={(e) => setArt({ ...art, totalArtPrice: Number(e.target.value) })}
-                    className="input-base"
-                    placeholder="0,00"
+                  <CurrencyInput
+                    value={art.totalArtPrice || 0}
+                    onChange={(value) => setArt({ ...art, totalArtPrice: value })}
                   />
                 </div>
 
@@ -897,14 +1149,10 @@ export function CalculatorPage({
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                   Seu Valor / Hora (R$)
                 </label>
-                <input
-                  type="number"
-                  step={1}
-                  min={0}
-                  value={labor.hourlyRate || ''}
-                  onChange={(e) => setLabor({ ...labor, hourlyRate: Number(e.target.value) })}
+                <CurrencyInput
+                  value={labor.hourlyRate || 0}
+                  onChange={(value) => setLabor({ ...labor, hourlyRate: value })}
                   className="input-base font-semibold"
-                  placeholder="Ex: 20"
                 />
               </div>
             </div>
@@ -931,14 +1179,9 @@ export function CalculatorPage({
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                   Embalagem
                 </label>
-                <input
-                  type="number"
-                  step={0.1}
-                  min={0}
-                  value={otherCosts.packaging || ''}
-                  onChange={(e) => setOtherCosts({ ...otherCosts, packaging: Number(e.target.value) })}
-                  className="input-base"
-                  placeholder="R$ 0,00"
+                <CurrencyInput
+                  value={otherCosts.packaging || 0}
+                  onChange={(value) => setOtherCosts({ ...otherCosts, packaging: value })}
                 />
               </div>
 
@@ -946,14 +1189,9 @@ export function CalculatorPage({
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                   Energia / Manutenção
                 </label>
-                <input
-                  type="number"
-                  step={0.05}
-                  min={0}
-                  value={otherCosts.electricity || ''}
-                  onChange={(e) => setOtherCosts({ ...otherCosts, electricity: Number(e.target.value) })}
-                  className="input-base"
-                  placeholder="R$ 0,00"
+                <CurrencyInput
+                  value={otherCosts.electricity || 0}
+                  onChange={(value) => setOtherCosts({ ...otherCosts, electricity: value })}
                 />
               </div>
 
@@ -961,15 +1199,10 @@ export function CalculatorPage({
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                   Perdas / Desperdício (%)
                 </label>
-                <input
-                  type="number"
-                  step={1}
-                  min={0}
+                <PercentInput
+                  value={waste.percentage}
+                  onChange={(value) => setWaste({ percentage: value || 0 })}
                   max={40}
-                  value={waste.percentage || ''}
-                  onChange={(e) => setWaste({ percentage: Number(e.target.value) })}
-                  className="input-base"
-                  placeholder="Ex: 5%"
                 />
               </div>
             </div>
@@ -1002,18 +1235,15 @@ export function CalculatorPage({
                     placeholder="Descrição do gasto"
                     className="input-base text-xs py-1.5 flex-1"
                   />
-                  <input
-                    type="number"
-                    step={0.5}
-                    value={exp.amount || ''}
-                    onChange={(e) => {
+                  <CurrencyInput
+                    value={exp.amount || 0}
+                    onChange={(value) => {
                       const updated = otherCosts.customExpenses.map((item) =>
-                        item.id === exp.id ? { ...item, amount: Number(e.target.value) } : item
+                        item.id === exp.id ? { ...item, amount: value } : item
                       );
                       setOtherCosts({ ...otherCosts, customExpenses: updated });
                     }}
-                    placeholder="R$ 0,00"
-                    className="input-base text-xs py-1.5 w-28"
+                    className="input-base text-xs py-1.5 w-32"
                   />
                   <button
                     type="button"
@@ -1080,15 +1310,10 @@ export function CalculatorPage({
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                     Margem de Lucro Desejada (%)
                   </label>
-                  <input
-                    type="number"
-                    step={1}
-                    min={1}
+                  <PercentInput
+                    value={pricing.targetMargin}
+                    onChange={(value) => setPricing({ ...pricing, targetMargin: value || 0 })}
                     max={90}
-                    value={pricing.targetMargin || ''}
-                    onChange={(e) => setPricing({ ...pricing, targetMargin: Number(e.target.value) })}
-                    className="input-base"
-                    placeholder="Ex: 40%"
                   />
                   <span className="text-[11px] text-slate-400 mt-1 block">
                     Fórmula: Preço = Custo / (1 - Margem)
@@ -1101,14 +1326,10 @@ export function CalculatorPage({
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                     Markup sobre o Custo (%)
                   </label>
-                  <input
-                    type="number"
-                    step={5}
-                    min={0}
-                    value={pricing.targetMarkup || ''}
-                    onChange={(e) => setPricing({ ...pricing, targetMarkup: Number(e.target.value) })}
-                    className="input-base"
-                    placeholder="Ex: 70%"
+                  <PercentInput
+                    value={pricing.targetMarkup}
+                    onChange={(value) => setPricing({ ...pricing, targetMarkup: value || 0 })}
+                    max={999}
                   />
                   <span className="text-[11px] text-slate-400 mt-1 block">
                     Fórmula: Preço = Custo * (1 + Markup)
@@ -1121,14 +1342,10 @@ export function CalculatorPage({
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
                     Preço Manual de Venda (R$)
                   </label>
-                  <input
-                    type="number"
-                    step={0.5}
-                    min={0}
-                    value={pricing.manualPrice || ''}
-                    onChange={(e) => setPricing({ ...pricing, manualPrice: Number(e.target.value) })}
+                  <CurrencyInput
+                    value={pricing.manualPrice || 0}
+                    onChange={(value) => setPricing({ ...pricing, manualPrice: value })}
                     className="input-base font-bold text-brand-700"
-                    placeholder="R$ 0,00"
                   />
                 </div>
               )}
@@ -1143,21 +1360,12 @@ export function CalculatorPage({
                   </label>
                   <Tooltip content="Informe uma porcentagem entre 0% e 100%. O desconto será aplicado sobre o preço de venda e o lucro restante será recalculado automaticamente." />
                 </div>
-                <input
-                  type="number"
-                  step={0.5}
-                  min={0}
+                <PercentInput
+                  value={pricing.discountPercent}
+                  onChange={(value) => setPricing({ ...pricing, discountPercent: value })}
+                  allowEmpty
                   max={100}
-                  value={pricing.discountPercent !== undefined ? pricing.discountPercent : ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setPricing({
-                      ...pricing,
-                      discountPercent: val === '' ? undefined : Math.max(0, Math.min(100, Number(val))),
-                    });
-                  }}
-                  className="input-base font-semibold text-brand-700"
-                  placeholder="0% (deixe vazio para 0%)"
+                  className="input-base pr-10 font-semibold text-brand-700"
                 />
                 <span className="text-[11px] text-slate-500 mt-1.5 block leading-tight">
                   {pricing.discountPercent && pricing.discountPercent > 0 ? (
@@ -1182,13 +1390,168 @@ export function CalculatorPage({
         </div>
 
         {/* Coluna da Direita: Card Fixo de Resumo de Custos e Venda */}
-        <div className="lg:col-span-5 xl:col-span-4">
+        <div className="lg:col-span-5 xl:col-span-4 space-y-6 relative isolate">
           <CostSummaryCard
             result={calculationResult}
             pricing={pricing}
             sheetCount={sheetCount}
           />
+
+          <div className="card-base p-5 space-y-4 relative z-0 border-pink-200 bg-white clear-both">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                  <BrainCircuit className="w-4 h-4 text-violet-600" />
+                  Análise inteligente de preços
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Uma sugestão baseada nos cálculos reais realizados pelo sistema.
+                </p>
+              </div>
+              {aiAnalysis && (
+                <button
+                  type="button"
+                  onClick={requestAiAnalysis}
+                  disabled={isAiLoading}
+                  className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+                  title="Solicitar nova análise"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isAiLoading ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+            </div>
+
+            {!aiAnalysis && !aiError && (
+              <button
+                type="button"
+                onClick={requestAiAnalysis}
+                disabled={isAiLoading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-brand-600 hover:from-violet-700 hover:to-brand-700 text-white font-bold text-xs shadow-md disabled:opacity-60"
+              >
+                {isAiLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <SparklesIcon className="w-4 h-4" />}
+                {isAiLoading ? 'Analisando custos...' : 'Solicitar análise inteligente'}
+              </button>
+            )}
+
+            {aiError && (
+              <div className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-800 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangleIcon className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{aiError} Os cálculos locais continuam disponíveis.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestAiAnalysis}
+                  disabled={isAiLoading}
+                  className="font-bold underline disabled:opacity-50"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+
+            {aiAnalysis && (
+              <div className="space-y-3">
+                {aiAnalysis.preco_sugerido < calculationResult.totalServiceCost && (
+                  <div className="flex items-start gap-2 p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-700">
+                    <AlertTriangleIcon className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      Atenção: o preço sugerido pela IA está abaixo do custo total de produção.
+                    </span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[10px] font-bold uppercase text-slate-500">Preço calculado pelo sistema</span>
+                    <strong className="block text-base text-slate-900 mt-1">{formatCurrency(calculationResult.finalSalePrice)}</strong>
+                  </div>
+                  <div className="p-3 rounded-xl bg-violet-50 border border-violet-100">
+                    <span className="text-[10px] font-bold uppercase text-violet-600">Preço sugerido pela IA</span>
+                    <strong className="block text-base text-violet-800 mt-1">{formatCurrency(aiAnalysis.preco_sugerido)}</strong>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+                    <span className="text-[10px] font-bold uppercase text-amber-700">Preço mínimo recomendado</span>
+                    <strong className="block text-base text-amber-800 mt-1">{formatCurrency(aiAnalysis.preco_minimo)}</strong>
+                  </div>
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                    <span className="text-[10px] font-bold uppercase text-emerald-700">Lucro estimado</span>
+                    <strong className="block text-base text-emerald-800 mt-1">{formatCurrency(aiAnalysis.lucro_estimado)}</strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100">
+                  <span className="text-xs font-semibold text-slate-600">Margem de lucro</span>
+                  <strong className="text-sm text-slate-900">{formatPercent(aiAnalysis.margem_lucro)}</strong>
+                </div>
+
+                <div className="text-xs leading-relaxed text-slate-600 space-y-2">
+                  <p><strong className="text-slate-800">Avaliação dos custos:</strong> {aiAnalysis.avaliacao}</p>
+                  <p><strong className="text-slate-800">Como chegar à sugestão:</strong> {aiAnalysis.justificativa}</p>
+                  {aiAnalysis.sugestao_quantidade && (
+                    <p><strong className="text-slate-800">Venda por quantidade:</strong> {aiAnalysis.sugestao_quantidade}</p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={requestAiAnalysis}
+                  disabled={isAiLoading}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-violet-200 text-violet-700 hover:bg-violet-50 font-bold text-xs disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isAiLoading ? 'animate-spin' : ''}`} />
+                  Solicitar nova análise
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="card-base p-4 space-y-3 border-pink-200 bg-pink-50/20">
+            <div className="flex items-center gap-2 border-b border-pink-100 pb-2">
+              <WandSparkles className="w-4 h-4 text-brand-600" />
+              <h3 className="font-extrabold text-slate-800 text-sm">Preencher calculadora com IA</h3>
+            </div>
+            <p className="text-[11px] text-slate-500">Informe apenas o nome do produto. Revise as estimativas antes de aplicar.</p>
+
+            <input
+              value={aiFillName}
+              onChange={(event) => setAiFillName(event.target.value)}
+              placeholder="Ex: Topo de bolo infantil"
+              className="input-base"
+            />
+
+            <button
+              type="button"
+              onClick={requestCalculatorFill}
+              disabled={isAiFillLoading}
+              className="w-full min-h-10 flex items-center justify-center gap-2 px-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs disabled:opacity-60"
+            >
+              {isAiFillLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <WandSparkles className="w-4 h-4" />}
+              {isAiFillLoading ? 'Estimando...' : 'Preencher com IA'}
+            </button>
+
+            {aiFillError && (
+              <div className="text-xs rounded-xl border border-amber-200 bg-amber-50 text-amber-800 p-2.5">{aiFillError}</div>
+            )}
+
+            {aiFillResult && (
+              <div className="space-y-2 pt-2 border-t border-pink-100">
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="p-2 rounded-lg bg-white border border-pink-100"><span className="text-slate-500 block">Preço sugerido</span><strong className="text-brand-700">{formatCurrency(aiFillResult.preco_sugerido)}</strong></div>
+                  <div className="p-2 rounded-lg bg-white border border-pink-100"><span className="text-slate-500 block">Margem</span><strong className="text-slate-800">{formatPercent(aiFillResult.margem_lucro)}</strong></div>
+                </div>
+                {Array.isArray(aiFillResult.estimativas) && aiFillResult.estimativas.length > 0 && (
+                  <p className="text-[10px] text-amber-700">Estimativas: {aiFillResult.estimativas.join('; ')}</p>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={applyCalculatorFill} className="px-2 py-2 rounded-lg bg-brand-600 text-white font-bold text-[11px]">Aplicar</button>
+                  <button type="button" onClick={() => setAiFillResult(null)} className="px-2 py-2 rounded-lg border border-slate-200 text-slate-700 font-bold text-[11px]">Cancelar</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+
       </div>
 
       {/* Modal de Catálogo de Insumos Reais */}

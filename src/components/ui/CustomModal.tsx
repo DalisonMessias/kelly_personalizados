@@ -53,9 +53,9 @@ export function CustomModal({
   }[variant];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden transform transition-all animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-pink-100 w-full max-w-lg max-h-[92dvh] overflow-hidden flex flex-col transform transition-all animate-in zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
       >
@@ -76,13 +76,13 @@ export function CustomModal({
         </div>
 
         {/* Corpo */}
-        <div className="px-6 py-5 text-slate-600 text-sm">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 text-slate-600 text-sm overflow-y-auto min-h-0">
           {description && <p className="mb-4 text-slate-600 leading-relaxed">{description}</p>}
           {children}
         </div>
 
         {/* Rodapé com botões de ação centralizados e elegantes */}
-        <div className="flex items-center justify-center gap-3 px-6 py-4 bg-slate-50 border-t border-slate-100">
+        <div className="flex items-stretch sm:items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 bg-pink-50/40 border-t border-pink-100 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-4">
           {showCancelButton && (
             <button
               type="button"

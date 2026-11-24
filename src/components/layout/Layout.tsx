@@ -22,7 +22,7 @@ export function Layout({ currentTab, onSelectTab, children }: LayoutProps) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row text-slate-800">
+    <div className="min-h-screen bg-white flex flex-col lg:flex-row text-slate-900">
       {/* Sidebar para desktop */}
       <Sidebar
         currentTab={currentTab}
@@ -39,7 +39,7 @@ export function Layout({ currentTab, onSelectTab, children }: LayoutProps) {
 
       {/* Área de conteúdo principal */}
       <main className="flex-1 flex flex-col min-w-0 pb-20 lg:pb-12">
-        <div className="max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="max-w-7xl w-full mx-auto px-3 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
           {children}
         </div>
       </main>

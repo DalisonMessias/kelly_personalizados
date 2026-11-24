@@ -7,7 +7,8 @@ import {
   Eye, 
   Calculator, 
   PlusCircle, 
-  FolderOpen
+  FolderOpen,
+  Copy
 } from 'lucide-react';
 import { CalculationRecord, ProductService } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/calculations';
@@ -23,6 +24,7 @@ interface HistoryPageProps {
   onNavigate: (tab: NavTab) => void;
   onRefreshCalculations: () => void;
   onLoadIntoCalculator: (product: ProductService) => void;
+  onDuplicateProduct: (product: ProductService) => void;
 }
 
 export function HistoryPage({
@@ -31,6 +33,7 @@ export function HistoryPage({
   onNavigate,
   onRefreshCalculations,
   onLoadIntoCalculator,
+  onDuplicateProduct,
 }: HistoryPageProps) {
   const { success } = useToast();
   const settings = storageService.getSettings();
@@ -67,61 +70,68 @@ export function HistoryPage({
     success('Histórico limpo', 'Todos os cálculos anteriores foram excluídos.');
   };
 
-  const handleReopenInCalculator = (calc: CalculationRecord) => {
-    // Localiza o produto no catálogo se existir
-    const foundProduct = products.find((p) => p.id === calc.productId || p.name === calc.productName);
+  const buildRestoredProduct = (calc: CalculationRecord): ProductService => {
+    const foundProduct = products.find((p) => p.id === calc.productId);
 
-    if (foundProduct) {
-      onLoadIntoCalculator(foundProduct);
-      onNavigate('calculator');
-    } else {
-      // Reconstrói com os dados reais salvos no histórico
-      const restoredProduct: ProductService = {
-        id: `calc-restore-${Date.now()}`,
-        name: calc.productName,
-        category: calc.category || 'adesivos',
-        description: calc.notes || '',
+    return {
+      id: foundProduct?.id || `calc-restore-${Date.now()}`,
+      name: calc.productName,
+      category: foundProduct?.category || calc.category || 'adesivos',
+      description: calc.notes || foundProduct?.description || '',
+      sheetCount: calc.sheetCount || foundProduct?.sheetCount || 1,
+      createdAt: foundProduct?.createdAt || calc.date,
+      updatedAt: new Date().toISOString(),
+      simpleMaterials: calc.simpleMaterials || foundProduct?.simpleMaterials || [],
+      materials: calc.materials || foundProduct?.materials || [],
+      ink: calc.ink || foundProduct?.ink || {
+        mode: 'per_sheet',
+        costPerSheet: settings.defaultInkCostPerSheet || 0.15,
+        costPerJob: calc.calculationResult.inkCost,
         sheetCount: calc.sheetCount || 1,
-        createdAt: calc.date,
-        updatedAt: new Date().toISOString(),
-        materials: [],
-        ink: {
-          mode: 'per_sheet',
-          costPerSheet: settings.defaultInkCostPerSheet || 0.15,
-          costPerJob: calc.calculationResult.inkCost,
-          sheetCount: calc.sheetCount || 1,
-        },
-        art: {
-          mode: 'full',
-          totalArtPrice: calc.calculationResult.artCost,
-          sheetsCount: 1,
-        },
-        labor: {
-          hourlyRate: settings.defaultHourlyRate || 20.0,
-          timeSpent: 0,
-          timeUnit: 'minutes',
-        },
-        otherCosts: {
-          packaging: 0,
-          electricity: 0,
-          printing: 0,
-          finishing: 0,
-          customExpenses: [],
-        },
-        waste: { percentage: settings.defaultWastePercentage || 5.0 },
-        pricing: {
-          method: 'manual',
-          targetMargin: calc.calculationResult.profitMarginPercent,
-          targetMarkup: calc.calculationResult.markupPercent,
-          manualPrice: calc.calculationResult.finalSalePrice,
-          clientDiscountPercent: 0,
-        },
-        quantityTiers: [],
-        calculationResult: calc.calculationResult,
-      };
-      onLoadIntoCalculator(restoredProduct);
-      onNavigate('calculator');
-    }
+      },
+      art: calc.art || foundProduct?.art || {
+        mode: 'full',
+        totalArtPrice: calc.calculationResult.artCost,
+        sheetsCount: 1,
+      },
+      labor: calc.labor || foundProduct?.labor || {
+        hourlyRate: settings.defaultHourlyRate || 20.0,
+        timeSpent: 0,
+        timeUnit: 'minutes',
+      },
+      otherCosts: calc.otherCosts || foundProduct?.otherCosts || {
+        packaging: 0,
+        electricity: 0,
+        printing: 0,
+        finishing: 0,
+        customExpenses: [],
+      },
+      waste: calc.waste || foundProduct?.waste || {
+        percentage: settings.defaultWastePercentage || 5.0,
+      },
+      pricing: calc.pricing || foundProduct?.pricing || {
+        method: 'manual',
+        targetMargin: calc.calculationResult.profitMarginPercent,
+        targetMarkup: calc.calculationResult.markupPercent,
+        manualPrice: calc.calculationResult.finalSalePrice,
+        discountPercent: calc.calculationResult.discountPercent,
+      },
+      quantityTiers: calc.quantityTiers || foundProduct?.quantityTiers || [],
+      calculationResult: calc.calculationResult,
+    };
+  };
+
+  const handleReopenInCalculator = (calc: CalculationRecord) => {
+    onLoadIntoCalculator(buildRestoredProduct(calc));
+    onNavigate('calculator');
+  };
+
+  const handleDuplicateFromHistory = (calc: CalculationRecord) => {
+    const restored = buildRestoredProduct(calc);
+    onDuplicateProduct({
+      ...restored,
+      name: `${restored.name} (Cópia)`,
+    });
   };
 
   return (
@@ -269,6 +279,15 @@ export function HistoryPage({
                     title="Reabrir na calculadora"
                   >
                     <Calculator className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDuplicateFromHistory(calc)}
+                    className="flex items-center gap-1.5 px-2.5 py-2 text-brand-700 hover:bg-pink-50 border border-pink-100 rounded-lg transition-colors"
+                    title="Duplicar serviço"
+                  >
+                    <Copy className="w-4 h-4" />
+                    <span className="hidden md:inline text-xs font-bold">Duplicar serviço</span>
                   </button>
                   <button
                     type="button"

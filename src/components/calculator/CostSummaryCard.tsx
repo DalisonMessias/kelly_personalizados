@@ -24,7 +24,7 @@ export function CostSummaryCard({ result, pricing, sheetCount }: CostSummaryCard
   const isLoss = result.estimatedProfit < 0;
 
   return (
-    <div className="card-base p-6 bg-white border-2 border-brand-100 shadow-xl shadow-brand-500/5 space-y-6 sticky top-6">
+    <div className="card-base p-5 sm:p-6 bg-white border-2 border-brand-100 shadow-lg shadow-brand-500/5 space-y-5 sm:space-y-6 relative z-0">
       {/* Topo do Resumo */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         <div>

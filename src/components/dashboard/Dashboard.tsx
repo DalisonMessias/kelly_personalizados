@@ -52,16 +52,16 @@ export function Dashboard({ products, calculations, onNavigate, onEditProduct }:
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* Cabeçalho Oficial Kelly Personalizados */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-brand-600 via-pink-600 to-primary-600 p-6 sm:p-8 rounded-3xl text-white shadow-xl shadow-brand-500/15">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-pink-50 via-white to-pink-100/70 p-5 sm:p-8 rounded-2xl text-slate-900 border border-pink-200 shadow-sm">
         <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold tracking-wide">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-pink-200 text-brand-700 text-xs font-semibold tracking-wide">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Kelly Personalizados</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Olá, Kelly! Bem-vinda ao seu ateliê
           </h2>
-          <p className="text-brand-100 text-sm max-w-xl">
+          <p className="text-slate-600 text-sm max-w-xl">
             {totalProducts === 0
               ? 'Seu aplicativo está pronto para receber suas encomendas. Cadastre seus materiais e custos para precificar de forma justa e descobrir seu lucro real.'
               : `Você tem ${totalProducts} ${totalProducts === 1 ? 'produto cadastrado' : 'produtos cadastrados'} no catálogo com margem média de ${formatPercent(averageMargin)}.`}
@@ -83,29 +83,29 @@ export function Dashboard({ products, calculations, onNavigate, onEditProduct }:
       {/* Grid de Cards Financeiros */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {/* Card 1: Lucro Estimado */}
-        <div className="card-base p-6 bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/15">
-          <div className="flex items-center justify-between opacity-90 mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider">Lucro Real Estimado</span>
-            <div className="p-2 rounded-xl bg-white/20 backdrop-blur-md">
+        <div className="card-base p-5 sm:p-6 bg-pink-50/60 border-pink-200">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Lucro Real Estimado</span>
+            <div className="p-2 rounded-xl bg-white text-brand-600 border border-pink-100">
               <TrendingUp className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold">{formatCurrency(totalEstimatedProfit)}</div>
-          <div className="mt-2 text-xs text-emerald-100 font-medium">
+          <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 break-words">{formatCurrency(totalEstimatedProfit)}</div>
+          <div className="mt-2 text-xs text-slate-600 font-medium">
             {totalProducts > 0 ? `Margem média de ${formatPercent(averageMargin)}` : 'Cadastre produtos para ver o lucro'}
           </div>
         </div>
 
         {/* Card 2: Valor Estimado de Vendas */}
-        <div className="card-base p-6 bg-gradient-to-br from-brand-600 to-pink-600 text-white shadow-lg shadow-brand-500/15">
-          <div className="flex items-center justify-between opacity-90 mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider">Vendas Estimadas</span>
-            <div className="p-2 rounded-xl bg-white/20 backdrop-blur-md">
+        <div className="card-base p-5 sm:p-6 bg-white border-pink-200">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Vendas Estimadas</span>
+            <div className="p-2 rounded-xl bg-brand-50 text-brand-600">
               <DollarSign className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold">{formatCurrency(totalEstimatedSales)}</div>
-          <div className="mt-2 text-xs text-pink-100">
+          <div className="text-2xl sm:text-3xl font-extrabold text-brand-700 break-words">{formatCurrency(totalEstimatedSales)}</div>
+          <div className="mt-2 text-xs text-slate-500">
             Soma dos preços de venda cadastrados
           </div>
         </div>

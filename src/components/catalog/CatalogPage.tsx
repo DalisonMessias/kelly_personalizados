@@ -24,6 +24,7 @@ interface CatalogPageProps {
   products: ProductService[];
   onNavigate: (tab: NavTab) => void;
   onEditProduct: (product: ProductService) => void;
+  onDuplicateProduct: (product: ProductService) => void;
   onRefreshProducts: () => void;
 }
 
@@ -31,6 +32,7 @@ export function CatalogPage({
   products,
   onNavigate,
   onEditProduct,
+  onDuplicateProduct,
   onRefreshProducts,
 }: CatalogPageProps) {
   const { success } = useToast();
@@ -61,12 +63,8 @@ export function CatalogPage({
     return matchesSearch && matchesCategory;
   });
 
-  const handleDuplicate = (id: string) => {
-    const duplicated = storageService.duplicateProduct(id);
-    if (duplicated) {
-      onRefreshProducts();
-      success('Serviço duplicado!', `Criada cópia de "${duplicated.name}".`);
-    }
+  const handleDuplicate = (product: ProductService) => {
+    onDuplicateProduct(product);
   };
 
   const confirmDelete = () => {
@@ -147,8 +145,8 @@ export function CatalogPage({
                   onClick={() => setSelectedCategory(filter.id)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                     isSelected
-                      ? 'bg-slate-900 text-white shadow-sm'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      ? 'bg-brand-600 text-white border border-brand-600 shadow-sm'
+                      : 'bg-pink-50/60 border border-pink-100 text-slate-700 hover:bg-pink-100'
                   }`}
                 >
                   {filter.label}
@@ -275,11 +273,12 @@ export function CatalogPage({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDuplicate(p.id)}
-                      className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                      title="Duplicar Serviço"
+                      onClick={() => handleDuplicate(p)}
+                      className="flex items-center gap-1.5 px-2.5 py-2 text-brand-700 hover:bg-pink-50 border border-pink-100 rounded-lg transition-colors"
+                      title="Duplicar serviço"
                     >
                       <Copy className="w-4 h-4" />
+                      <span className="hidden sm:inline text-xs font-bold">Duplicar serviço</span>
                     </button>
                     <button
                       type="button"

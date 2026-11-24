@@ -1,10 +1,27 @@
-import { AppBackupData, AppSettings, CalculationRecord, ProductService } from '../types';
+import { AppBackupData, AppSettings, CalculationRecord, ChatConversation, Customer, CustomerQuote, ProductService, QuoteTag, ServiceOrder } from '../types';
+import { storeRepository } from './storeRepository';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'kelly_calc_products_v4',
   CALCULATIONS: 'kelly_calc_history_v4',
   SETTINGS: 'kelly_calc_settings_v4',
+  CHAT_CONVERSATIONS: 'kelly_chat_conversations_v1',
+  SERVICE_ORDERS: 'kelly_service_orders_v1',
+  CUSTOMERS: 'kelly_customers_v1',
+  QUOTES: 'kelly_quotes_v1',
+  QUOTE_TAGS: 'kelly_quote_tags_v1',
 };
+
+export const DEFAULT_QUOTE_TAGS: QuoteTag[] = [
+  { id: 'tag-art-inclusa', name: 'Arte inclusa', color: '#db2777', custom: false },
+  { id: 'tag-art-aprovada', name: 'Arte aprovada', color: '#16a34a', custom: false },
+  { id: 'tag-aguardando', name: 'Aguardando aprovação', color: '#f59e0b', custom: false },
+  { id: 'tag-personalizado', name: 'Personalizado', color: '#7c3aed', custom: false },
+  { id: 'tag-entrega', name: 'Entrega', color: '#2563eb', custom: false },
+  { id: 'tag-retirada', name: 'Retirada', color: '#0891b2', custom: false },
+  { id: 'tag-urgente', name: 'Urgente', color: '#dc2626', custom: false },
+  { id: 'tag-em-producao', name: 'Em produção', color: '#ea580c', custom: false },
+];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   shopName: 'Kelly Personalizados',
@@ -153,6 +170,137 @@ export const storageService = {
     return updated;
   },
 
+  // Conversas do Assistente IA
+  getChatConversations(): ChatConversation[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.CHAT_CONVERSATIONS);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveChatConversations(conversations: ChatConversation[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CHAT_CONVERSATIONS, JSON.stringify(conversations));
+    } catch (e) {
+      console.error('Falha ao salvar conversas:', e);
+    }
+  },
+
+  deleteChatConversation(id: string): ChatConversation[] {
+    const updated = this.getChatConversations().filter((conversation) => conversation.id !== id);
+    this.saveChatConversations(updated);
+    return updated;
+  },
+
+  // Ordens de Serviço
+  getServiceOrders(): ServiceOrder[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.SERVICE_ORDERS);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveServiceOrder(order: ServiceOrder): ServiceOrder[] {
+    const updated = [order, ...this.getServiceOrders()];
+    try {
+      localStorage.setItem(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Falha ao salvar ordem de serviço:', e);
+    }
+    return updated;
+  },
+
+  deleteServiceOrder(id: string): ServiceOrder[] {
+    const updated = this.getServiceOrders().filter((order) => order.id !== id);
+    try {
+      localStorage.setItem(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Falha ao excluir ordem de serviço:', e);
+    }
+    return updated;
+  },
+
+  // Clientes
+  getCustomers(): Customer[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveCustomer(customer: Customer): Customer[] {
+    const customers = this.getCustomers();
+    const existingIndex = customers.findIndex((item) => item.id === customer.id);
+    const now = new Date().toISOString();
+    const updated = existingIndex >= 0
+      ? customers.map((item) => item.id === customer.id ? { ...customer, updatedAt: now } : item)
+      : [{ ...customer, id: customer.id || `client-${Date.now()}`, createdAt: now, updatedAt: now }, ...customers];
+    localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(updated));
+    return updated;
+  },
+
+  deleteCustomer(id: string): Customer[] {
+    const updated = this.getCustomers().filter((customer) => customer.id !== id);
+    localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(updated));
+    return updated;
+  },
+
+  // Orçamentos
+  getQuotes(): CustomerQuote[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.QUOTES);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveQuote(quote: CustomerQuote): CustomerQuote[] {
+    const quotes = this.getQuotes();
+    const existingIndex = quotes.findIndex((item) => item.id === quote.id);
+    const now = new Date().toISOString();
+    const updated = existingIndex >= 0
+      ? quotes.map((item) => item.id === quote.id ? { ...quote, updatedAt: now } : item)
+      : [{ ...quote, id: quote.id || `quote-${Date.now()}`, createdAt: now, updatedAt: now }, ...quotes];
+    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(updated));
+    return updated;
+  },
+
+  deleteQuote(id: string): CustomerQuote[] {
+    const updated = this.getQuotes().filter((quote) => quote.id !== id);
+    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(updated));
+    return updated;
+  },
+
+  // Etiquetas de orçamentos
+  getQuoteTags(): QuoteTag[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.QUOTE_TAGS);
+      if (!data) {
+        this.saveQuoteTags(DEFAULT_QUOTE_TAGS);
+        return DEFAULT_QUOTE_TAGS;
+      }
+      const saved = JSON.parse(data) as QuoteTag[];
+      const merged = [...DEFAULT_QUOTE_TAGS];
+      saved.forEach((tag) => {
+        if (!merged.some((item) => item.id === tag.id)) merged.push(tag);
+      });
+      return merged;
+    } catch {
+      return DEFAULT_QUOTE_TAGS;
+    }
+  },
+
+  saveQuoteTags(tags: QuoteTag[]): void {
+    localStorage.setItem(STORAGE_KEYS.QUOTE_TAGS, JSON.stringify(tags));
+  },
+
   // Backup e Restauração de Dados
   generateBackupData(): AppBackupData {
     return {
@@ -161,6 +309,14 @@ export const storageService = {
       products: this.getProducts(),
       calculations: this.getCalculations(),
       settings: this.getSettings(),
+      conversations: this.getChatConversations(),
+      serviceOrders: this.getServiceOrders(),
+      customers: this.getCustomers(),
+      quotes: this.getQuotes(),
+      quoteTags: this.getQuoteTags(),
+      storeProducts: storeRepository.getProducts(),
+      storeCategories: storeRepository.getCategories(),
+      futureOrders: storeRepository.getFutureOrders(),
     };
   },
 
@@ -201,6 +357,32 @@ export const storageService = {
         this.saveSettings(data.settings);
       }
 
+      if (Array.isArray(data.conversations)) {
+        this.saveChatConversations(data.conversations);
+      }
+
+      if (Array.isArray(data.serviceOrders)) {
+        localStorage.setItem(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify(data.serviceOrders));
+      }
+
+      if (Array.isArray(data.customers)) {
+        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(data.customers));
+      }
+
+      if (Array.isArray(data.quotes)) {
+        localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(data.quotes));
+      }
+
+      if (Array.isArray(data.quoteTags)) {
+        this.saveQuoteTags(data.quoteTags);
+      }
+
+      storeRepository.restoreBackup({
+        products: data.storeProducts,
+        categories: data.storeCategories,
+        futureOrders: data.futureOrders,
+      });
+
       return {
         success: true,
         message: `Backup restaurado com sucesso! ${data.products.length} produtos carregados.`,
@@ -217,6 +399,15 @@ export const storageService = {
     localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
     localStorage.removeItem(STORAGE_KEYS.CALCULATIONS);
     localStorage.removeItem(STORAGE_KEYS.SETTINGS);
+    localStorage.removeItem(STORAGE_KEYS.CHAT_CONVERSATIONS);
+    localStorage.removeItem(STORAGE_KEYS.SERVICE_ORDERS);
+    localStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
+    localStorage.removeItem(STORAGE_KEYS.QUOTES);
+    localStorage.removeItem(STORAGE_KEYS.QUOTE_TAGS);
+    localStorage.removeItem('kelly_store_products_v1');
+    localStorage.removeItem('kelly_store_categories_v1');
+    localStorage.removeItem('kelly_future_orders_v1');
+    localStorage.removeItem('kelly_store_change_history_v1');
     this.saveSettings(DEFAULT_SETTINGS);
     this.saveAllProducts([]);
   },
