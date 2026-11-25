@@ -140,3 +140,9 @@
 - [x] Inclusão de comando separado para republicar somente a função ai-product-builder após a atualização das estimativas (package.json)
 - [x] Verificação estática concluída com zero diagnósticos TypeScript, zero erros de sintaxe na função e confirmação de campos obrigatórios, parâmetros do ateliê e indicações de sugestão
 - [x] Registro da regra de preenchimento completo e estimativas identificadas na base técnica incremental (documentation/continuous_learning_skills.md)
+
+- [x] Inclusão da estrutura aditiva de solicitações de orçamento na parte 3 do esquema Supabase, com funções públicas controladas, operações administrativas, arquivamento lógico, histórico e conversão idempotente para pedidos (supabase/migrations/supabase_global_part3.sql)
+- [x] Criação do formulário público sem login, com seleção e preenchimento inicial de produto, dados do cliente, detalhes, prazo, imagem opcional privada, revisão, protocolo e informação de retorno pelo WhatsApp (src/components/storefront/CustomQuoteRequestForm.tsx, src/components/storefront/StorefrontPage.tsx e src/routes.ts)
+- [x] Criação do painel administrativo de solicitações com busca, filtros, edição, valor, situações, anotações, histórico, link de conversa manual, imagem privada, arquivamento preservador e conversão para pedido (src/components/storefront/CustomQuoteRequestsPage.tsx e src/services/storefrontService.ts)
+- [x] Integração da URL pública, rota administrativa e entradas nos menus desktop e móvel, com acesso protegido pelo controle administrativo existente (src/App.tsx, src/routes.ts, src/components/layout/Sidebar.tsx e src/components/layout/MobileNav.tsx)
+- [x] Verificação estática concluída sem diagnósticos TypeScript nos oito módulos integrados; a validação ao vivo depende da aplicação do esquema no Supabase e a inspeção visual não pôde ser feita nesta sessão

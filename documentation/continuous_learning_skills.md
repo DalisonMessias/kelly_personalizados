@@ -116,3 +116,11 @@ Este documento centraliza e documenta todas as soluções técnicas, correções
 - **Causa identificada:** A primeira versão seguia a regra anterior de não estimar valores ausentes e devolvia campos vazios ou nulos quando o pedido não trazia informações comerciais ou medidas.
 - **Solução aplicada:** A geração agora exige valores numéricos e textos completos, apresenta medidas e custos ausentes como sugestões da IA, usa os parâmetros reais de valor-hora, margem, markup, desperdício e tinta, calcula a mão de obra pelo valor-hora e evita sugerir preço abaixo do custo e da margem. As sugestões são sinalizadas e editáveis no Assistente e no Catálogo.
 - **Prevenção:** Separar recomendações de IA de dados confirmados, persistir essa indicação com o produto e validar que todos os campos estão preenchidos antes de salvar ou publicar.
+
+
+### Registro 15: Solicitações públicas de orçamento com preservação do histórico
+
+- **Contexto:** A loja pública passou a receber pedidos de orçamento sem exigir conta do cliente, enquanto o painel administra a análise e a conversão do orçamento em pedido.
+- **Risco identificado:** Permitir leitura pública direta da tabela exporia dados pessoais; armazenar imagens em URLs públicas ou apagar registros eliminaria privacidade e histórico; converter sem bloqueio poderia duplicar pedidos.
+- **Solução aplicada:** A tabela fica sem acesso direto para visitantes; o envio passa por função validada, a imagem usa o bucket privado existente, as operações administrativas verificam a conta autorizada, a remoção é arquivamento lógico e a conversão bloqueia a linha e devolve o pedido existente quando chamada novamente.
+- **Prevenção:** Para fluxos públicos ligados ao painel, restringir a escrita a funções validadas, manter dados pessoais fora das leituras públicas, usar armazenamento privado para arquivos e tornar conversões transacionais e idempotentes.
