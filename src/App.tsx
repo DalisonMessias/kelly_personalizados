@@ -18,6 +18,7 @@ import { supabase } from './services/supabase';
 import { STORE_ROUTES } from './routes';
 import { StorefrontPage } from './components/storefront/StorefrontPage';
 import { StorefrontOrdersPage } from './components/storefront/StorefrontOrdersPage';
+import { CustomQuoteRequestsPage } from './components/storefront/CustomQuoteRequestsPage';
 import { UserManagementPage } from './components/users/UserManagementPage';
 import { CustomModal } from './components/ui/CustomModal';
 import { useToast } from './components/ui/Toast';
@@ -42,7 +43,8 @@ export function App() {
   const [adminAccess, setAdminAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
   const [currentTab, setCurrentTab] = useState<NavTab>(() => window.location.pathname.startsWith(STORE_ROUTES.adminOrders)
     ? 'store-orders'
-    : window.location.pathname.startsWith(STORE_ROUTES.adminUsers) ? 'users' : 'dashboard');
+    : window.location.pathname.startsWith(STORE_ROUTES.adminQuoteRequests) ? 'quote-requests'
+      : window.location.pathname.startsWith(STORE_ROUTES.adminUsers) ? 'users' : 'dashboard');
   const [settingsUnsaved, setSettingsUnsaved] = useState(false);
   const [pendingTab, setPendingTab] = useState<NavTab | null>(null);
   const [discardSettingsOpen, setDiscardSettingsOpen] = useState(false);
@@ -64,7 +66,8 @@ export function App() {
     setCurrentTab(tab);
     navigate(tab === 'store-orders'
       ? STORE_ROUTES.adminOrders
-      : tab === 'users' ? STORE_ROUTES.adminUsers : STORE_ROUTES.admin);
+      : tab === 'quote-requests' ? STORE_ROUTES.adminQuoteRequests
+        : tab === 'users' ? STORE_ROUTES.adminUsers : STORE_ROUTES.admin);
   }, [navigate]);
 
   const handleSelectTab = useCallback((tab: NavTab) => {
@@ -144,8 +147,9 @@ export function App() {
 
   useEffect(() => {
     if (currentPath.startsWith(STORE_ROUTES.adminOrders)) setCurrentTab('store-orders');
+    else if (currentPath.startsWith(STORE_ROUTES.adminQuoteRequests)) setCurrentTab('quote-requests');
     else if (currentPath.startsWith(STORE_ROUTES.adminUsers)) setCurrentTab('users');
-    else if (currentPath.startsWith('/admin') && (currentTab === 'store-orders' || currentTab === 'users')) setCurrentTab('dashboard');
+    else if (currentPath.startsWith('/admin') && (currentTab === 'store-orders' || currentTab === 'quote-requests' || currentTab === 'users')) setCurrentTab('dashboard');
   }, [currentPath, currentTab]);
   const [products, setProducts] = useState<ProductService[]>(storageService.getProducts());
   const [calculations, setCalculations] = useState<CalculationRecord[]>(storageService.getCalculations());
@@ -304,6 +308,10 @@ export function App() {
 
           {currentTab === 'store-orders' && (
             <StorefrontOrdersPage />
+          )}
+
+          {currentTab === 'quote-requests' && (
+            <CustomQuoteRequestsPage onOpenOrders={() => navigateToTab('store-orders')} />
           )}
 
           {currentTab === 'settings' && (

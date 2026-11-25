@@ -1,11 +1,12 @@
-# Plano de tarefas — Campos completos e valores sugeridos por IA
+# Plano de tarefas — Solicitação de Orçamento Personalizado
 
-[x] 1. Revisar checklist, plano anterior, configuração do ateliê, tipos do catálogo e fluxo atual de geração e edição.
-[x] 2. Atualizar a chamada da IA para receber os parâmetros de precificação já configurados no sistema.
-[x] 3. Exigir campos preenchidos e estimativas identificadas para dimensões, ficha técnica, custos, preço, margem e demais campos da prévia.
-[x] 4. Aplicar valores de contingência claros quando a resposta da IA vier incompleta, sem deixar campos vazios ou apresentar estimativas como confirmadas.
-[x] 5. Sinalizar valores sugeridos pela IA na prévia, no catálogo e no editor; preservar o estado de rascunho e a publicação manual.
-[x] 6. Verificar tipos e sintaxe, e registrar as alterações concluídas no checklist e na base de conhecimento.
-[ ] 7. Publicar a versão atualizada de ai-product-builder e testar a geração e o salvamento real da sacola no Supabase.
+[x] 1. Revisar checklist, documentação, rotas, catálogo público, pedidos, permissões administrativas e estruturas Supabase existentes.
+[x] 2. Confirmar que não existe tabela de orçamentos públicos e identificar o armazenamento privado de imagens e o pedido reutilizável para conversão.
+[ ] 3. Adicionar no arquivo global da parte 3 a tabela, índices, políticas e funções seguras para criar, administrar, arquivar e converter orçamentos sem apagar dados.
+[ ] 4. Criar o formulário público com seleção opcional de produto, validação, referência de imagem privada, confirmação e URL amigável.
+[ ] 5. Criar a seção administrativa com lista, filtros, detalhes, edição de status e valor, observações, imagem e atalho de WhatsApp.
+[ ] 6. Implementar conversão transacional e idempotente do orçamento aprovado em pedido existente, preservando histórico.
+[ ] 7. Integrar rota, menus e acesso do painel; validar tipos, sintaxe, permissões e preservação dos dados.
+[ ] 8. Acrescentar ao checklist e à base técnica somente os resultados concluídos.
 
-A checagem local passou sem diagnósticos. A tarefa 7 exige executar o comando separado de publicação e repetir o exemplo com a chave Gemini configurada.
+A exclusão solicitada será implementada como arquivamento lógico, preservando as solicitações e seus históricos conforme a regra de conservação de dados.

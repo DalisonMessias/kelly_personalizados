@@ -41,6 +41,37 @@ begin
 end
 $$;
 
+-- Prepara a tabela de orçamentos antes de aplicar as restrições iniciais de acesso.
+create table if not exists public.kelly_storefront_quote_requests_v1 (
+  id uuid primary key,
+  quote_number text not null unique,
+  customer_name text not null,
+  customer_whatsapp text not null,
+  product_id text,
+  product_name text not null,
+  quantity integer not null check (quantity > 0),
+  idea text not null,
+  material text not null default '',
+  dimensions text not null default '',
+  colors text not null default '',
+  personalizations text not null default '',
+  desired_deadline date,
+  reference_path text,
+  additional_notes text not null default '',
+  status text not null default 'novo_orcamento'
+    check (status in ('novo_orcamento','em_analise','aguardando_informacoes','orcamento_enviado','aprovado','recusado','convertido_em_pedido','cancelado')),
+  quote_amount numeric(12,2) check (quote_amount is null or quote_amount >= 0),
+  internal_notes text not null default '',
+  status_history jsonb not null default '[]'::jsonb,
+  converted_order_id uuid,
+  archived_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Reforça a ausência de acesso direto via privilégios herdados do papel público.
+revoke all on table public.kelly_storefront_quote_requests_v1 from public, anon, authenticated;
+
 -- Habilita a transmissão segura de novos snapshots para sincronizar a página de configurações.
 do $$
 begin
@@ -1238,3 +1269,470 @@ create index if not exists api_keys_product_creator_lookup_idx
 
 alter table public.api_keys enable row level security;
 grant all on table public.api_keys to service_role;
+
+-- Solicitações públicas de orçamento, separadas dos pedidos já confirmados.
+create table if not exists public.kelly_storefront_quote_requests_v1 (
+  id uuid primary key,
+  quote_number text not null unique,
+  customer_name text not null,
+  customer_whatsapp text not null,
+  product_id text,
+  product_name text not null,
+  quantity integer not null check (quantity > 0),
+  idea text not null,
+  material text not null default '',
+  dimensions text not null default '',
+  colors text not null default '',
+  personalizations text not null default '',
+  desired_deadline date,
+  reference_path text,
+  additional_notes text not null default '',
+  status text not null default 'novo_orcamento'
+    check (status in ('novo_orcamento','em_analise','aguardando_informacoes','orcamento_enviado','aprovado','recusado','convertido_em_pedido','cancelado')),
+  quote_amount numeric(12,2) check (quote_amount is null or quote_amount >= 0),
+  internal_notes text not null default '',
+  status_history jsonb not null default '[]'::jsonb,
+  converted_order_id uuid,
+  archived_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.kelly_storefront_quote_requests_v1
+  add column if not exists quote_number text,
+  add column if not exists customer_name text,
+  add column if not exists customer_whatsapp text,
+  add column if not exists product_id text,
+  add column if not exists product_name text,
+  add column if not exists quantity integer,
+  add column if not exists idea text,
+  add column if not exists material text,
+  add column if not exists dimensions text,
+  add column if not exists colors text,
+  add column if not exists personalizations text,
+  add column if not exists desired_deadline date,
+  add column if not exists reference_path text,
+  add column if not exists additional_notes text,
+  add column if not exists status text,
+  add column if not exists quote_amount numeric(12,2),
+  add column if not exists internal_notes text,
+  add column if not exists status_history jsonb,
+  add column if not exists converted_order_id uuid,
+  add column if not exists archived_at timestamptz,
+  add column if not exists created_at timestamptz,
+  add column if not exists updated_at timestamptz;
+
+create unique index if not exists kelly_storefront_quote_requests_number_uidx
+  on public.kelly_storefront_quote_requests_v1 (quote_number)
+  where quote_number is not null;
+create index if not exists kelly_storefront_quote_requests_status_created_idx
+  on public.kelly_storefront_quote_requests_v1 (status, created_at desc)
+  where archived_at is null;
+create index if not exists kelly_storefront_quote_requests_phone_created_idx
+  on public.kelly_storefront_quote_requests_v1 (customer_whatsapp, created_at desc);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'kelly_storefront_quote_requests_converted_order_fk'
+      and conrelid = 'public.kelly_storefront_quote_requests_v1'::regclass
+  ) then
+    alter table public.kelly_storefront_quote_requests_v1
+      add constraint kelly_storefront_quote_requests_converted_order_fk
+      foreign key (converted_order_id) references public.kelly_storefront_orders_v1(id)
+      on delete restrict not valid;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'kelly_storefront_quote_requests_status_check'
+      and conrelid = 'public.kelly_storefront_quote_requests_v1'::regclass
+  ) then
+    alter table public.kelly_storefront_quote_requests_v1
+      add constraint kelly_storefront_quote_requests_status_check
+      check (status in ('novo_orcamento','em_analise','aguardando_informacoes','orcamento_enviado','aprovado','recusado','convertido_em_pedido','cancelado'))
+      not valid;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'kelly_storefront_quote_requests_amount_check'
+      and conrelid = 'public.kelly_storefront_quote_requests_v1'::regclass
+  ) then
+    alter table public.kelly_storefront_quote_requests_v1
+      add constraint kelly_storefront_quote_requests_amount_check
+      check (quote_amount is null or quote_amount >= 0)
+      not valid;
+  end if;
+end
+$$;
+
+alter table public.kelly_storefront_quote_requests_v1 enable row level security;
+revoke all on table public.kelly_storefront_quote_requests_v1 from anon, authenticated;
+grant all on table public.kelly_storefront_quote_requests_v1 to service_role;
+
+-- A criação pública valida e grava apenas o pedido recebido, sem permitir leitura pública.
+create or replace function public.kelly_submit_custom_quote_request_v1(
+  p_request_id uuid,
+  p_customer_name text,
+  p_customer_whatsapp text,
+  p_product_id text,
+  p_product_name text,
+  p_quantity integer,
+  p_idea text,
+  p_material text default '',
+  p_dimensions text default '',
+  p_colors text default '',
+  p_personalizations text default '',
+  p_desired_deadline date default null,
+  p_additional_notes text default ''
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_phone text;
+  v_product_name text;
+  v_catalog jsonb;
+  v_product jsonb;
+  v_count integer;
+  v_quote_number text;
+  v_created_at timestamptz;
+begin
+  if p_request_id is null then raise exception 'Solicitação inválida.'; end if;
+  select quote_number, created_at into v_quote_number, v_created_at
+    from public.kelly_storefront_quote_requests_v1 where id = p_request_id;
+  if found then
+    return jsonb_build_object('id', p_request_id, 'quoteNumber', v_quote_number, 'createdAt', v_created_at);
+  end if;
+
+  if length(trim(coalesce(p_customer_name,''))) < 2 or length(trim(p_customer_name)) > 120 then
+    raise exception 'Informe o nome completo do cliente.';
+  end if;
+  v_phone := regexp_replace(coalesce(p_customer_whatsapp,''), '[^0-9]', '', 'g');
+  if length(v_phone) in (10,11) then v_phone := '55' || v_phone; end if;
+  if v_phone !~ '^55[0-9]{10,11}$' then raise exception 'Informe um WhatsApp válido com DDD.'; end if;
+  if p_quantity is null or p_quantity < 1 or p_quantity > 9999 then raise exception 'Informe uma quantidade entre 1 e 9.999.'; end if;
+  if length(trim(coalesce(p_idea,''))) < 10 or length(p_idea) > 5000 then raise exception 'Descreva sua ideia com pelo menos 10 caracteres.'; end if;
+  if length(coalesce(p_product_name,'')) > 160 or length(coalesce(p_product_id,'')) > 160 then raise exception 'O nome ou produto selecionado excede o limite permitido.'; end if;
+  if length(coalesce(p_material,'')) > 500 or length(coalesce(p_dimensions,'')) > 500 or
+    length(coalesce(p_colors,'')) > 500 or length(coalesce(p_personalizations,'')) > 1500 or
+    length(coalesce(p_additional_notes,'')) > 2000 then
+    raise exception 'Um dos detalhes informados excede o limite permitido.';
+  end if;
+  if p_desired_deadline is not null and p_desired_deadline < current_date then
+    raise exception 'A data desejada não pode estar no passado.';
+  end if;
+
+  select count(*) into v_count
+    from public.kelly_storefront_quote_requests_v1
+    where customer_whatsapp = v_phone and created_at > now() - interval '10 minutes';
+  if v_count >= 3 then raise exception 'Limite temporário de solicitações atingido. Tente novamente mais tarde.'; end if;
+
+  v_product_name := nullif(trim(coalesce(p_product_name,'')), '');
+  if nullif(trim(coalesce(p_product_id,'')), '') is not null then
+    v_catalog := public.kelly_get_storefront_catalog_v1();
+    select item into v_product
+      from jsonb_array_elements(coalesce(v_catalog->'products','[]'::jsonb)) as item
+      where item->>'id' = p_product_id
+      limit 1;
+    if v_product is null then raise exception 'O produto selecionado não está disponível no catálogo.'; end if;
+    if v_product_name is null then v_product_name := v_product->>'name'; end if;
+  end if;
+  if v_product_name is null or length(v_product_name) < 2 then raise exception 'Informe o produto ou serviço desejado.'; end if;
+
+  v_quote_number := 'ORC-' || to_char(now(), 'YYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 6));
+  insert into public.kelly_storefront_quote_requests_v1 (
+    id, quote_number, customer_name, customer_whatsapp, product_id, product_name, quantity,
+    idea, material, dimensions, colors, personalizations, desired_deadline, additional_notes,
+    status, status_history, created_at, updated_at
+  ) values (
+    p_request_id, v_quote_number, trim(p_customer_name), v_phone, nullif(trim(coalesce(p_product_id,'')),''),
+    v_product_name, p_quantity, trim(p_idea), trim(coalesce(p_material,'')), trim(coalesce(p_dimensions,'')),
+    trim(coalesce(p_colors,'')), trim(coalesce(p_personalizations,'')), p_desired_deadline,
+    trim(coalesce(p_additional_notes,'')), 'novo_orcamento',
+    jsonb_build_array(jsonb_build_object('previousStatus', null, 'newStatus', 'novo_orcamento',
+      'note', 'Solicitação recebida pela loja virtual.', 'createdAt', now(), 'actorUserId', null)), now(), now()
+  );
+
+  return jsonb_build_object('id', p_request_id, 'quoteNumber', v_quote_number, 'status', 'novo_orcamento', 'createdAt', now());
+end;
+$$;
+
+-- Permite anexar uma referência privada somente à solicitação recente que gerou o caminho.
+create or replace function public.kelly_can_upload_custom_quote_reference_v1(p_path text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, storage
+as $$
+  select p_path ~ '^quote/[0-9a-fA-F-]{36}/[0-9a-fA-F-]{36}[.](png|jpg|webp)$'
+    and exists (
+      select 1 from public.kelly_storefront_quote_requests_v1 as request
+      where request.id::text = split_part(p_path, '/', 2)
+        and request.created_at > now() - interval '30 minutes'
+        and request.archived_at is null
+        and request.reference_path is null
+    )
+    and not exists (
+      select 1 from storage.objects as object
+      where object.bucket_id = 'kelly_private_quote_assets_v1'
+        and split_part(object.name, '/', 2) = split_part(p_path, '/', 2)
+    );
+$$;
+
+create or replace function public.kelly_set_custom_quote_reference_v1(p_quote_id uuid, p_path text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, storage
+as $$
+declare
+  v_updated integer;
+begin
+  if p_quote_id is null or p_path !~ ('^quote/' || p_quote_id::text || '/[0-9a-fA-F-]{36}[.](png|jpg|webp)$') then
+    raise exception 'Referência de imagem inválida.';
+  end if;
+  if not exists (
+    select 1 from storage.objects
+    where bucket_id = 'kelly_private_quote_assets_v1' and name = p_path
+  ) then raise exception 'A imagem ainda não foi recebida pelo armazenamento privado.'; end if;
+
+  update public.kelly_storefront_quote_requests_v1
+    set reference_path = p_path, updated_at = now()
+    where id = p_quote_id and reference_path is null and archived_at is null
+      and created_at > now() - interval '30 minutes';
+  get diagnostics v_updated = row_count;
+  if v_updated = 0 then raise exception 'A solicitação não está mais disponível para anexar esta imagem.'; end if;
+  return jsonb_build_object('id', p_quote_id, 'referencePath', p_path);
+end;
+$$;
+
+-- Estas rotinas administrativas nunca expõem dados do cliente a visitantes públicos.
+create or replace function public.kelly_get_custom_quote_requests_v1(p_include_archived boolean default false)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_requests jsonb;
+begin
+  if not public.kelly_is_storefront_admin_v1() then raise exception 'Acesso administrativo necessário.'; end if;
+  select coalesce(jsonb_agg(to_jsonb(request) order by request.created_at desc), '[]'::jsonb)
+    into v_requests
+    from (
+      select * from public.kelly_storefront_quote_requests_v1
+      where p_include_archived or archived_at is null
+      order by created_at desc limit 1000
+    ) as request;
+  return v_requests;
+end;
+$$;
+
+create or replace function public.kelly_update_custom_quote_request_v1(
+  p_quote_id uuid,
+  p_product_name text,
+  p_quantity integer,
+  p_idea text,
+  p_material text,
+  p_dimensions text,
+  p_colors text,
+  p_personalizations text,
+  p_desired_deadline date,
+  p_additional_notes text,
+  p_status text,
+  p_quote_amount numeric,
+  p_internal_notes text,
+  p_history_note text default ''
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_request public.kelly_storefront_quote_requests_v1%rowtype;
+  v_previous_status text;
+  v_old_data jsonb;
+begin
+  if not public.kelly_is_storefront_admin_v1() then raise exception 'Acesso administrativo necessário.'; end if;
+  if p_status not in ('novo_orcamento','em_analise','aguardando_informacoes','orcamento_enviado','aprovado','recusado','cancelado') then
+    raise exception 'Situação inválida. A conversão em pedido possui uma ação própria.';
+  end if;
+  if p_quantity is null or p_quantity < 1 or p_quantity > 9999 then raise exception 'Quantidade inválida.'; end if;
+  if length(trim(coalesce(p_product_name,''))) < 2 or length(p_product_name) > 160 then raise exception 'Informe um nome válido para o produto.'; end if;
+  if length(trim(coalesce(p_idea,''))) < 10 or length(p_idea) > 5000 then raise exception 'A descrição precisa ter pelo menos 10 caracteres.'; end if;
+  if p_quote_amount is not null and (p_quote_amount < 0 or p_quote_amount > 1000000) then raise exception 'O valor do orçamento está fora do limite permitido.'; end if;
+  if length(coalesce(p_material,'')) > 500 or length(coalesce(p_dimensions,'')) > 500 or
+    length(coalesce(p_colors,'')) > 500 or length(coalesce(p_personalizations,'')) > 1500 or
+    length(coalesce(p_additional_notes,'')) > 2000 or length(coalesce(p_internal_notes,'')) > 5000 or
+    length(coalesce(p_history_note,'')) > 500 then raise exception 'Um dos campos excede o limite permitido.'; end if;
+  if p_desired_deadline is not null and p_desired_deadline < current_date then raise exception 'A data desejada não pode estar no passado.'; end if;
+
+  select * into v_request from public.kelly_storefront_quote_requests_v1
+    where id = p_quote_id for update;
+  if not found then raise exception 'Solicitação de orçamento não encontrada.'; end if;
+  if v_request.archived_at is not null then raise exception 'Restaure a solicitação antes de editá-la.'; end if;
+  if v_request.status = 'convertido_em_pedido' then raise exception 'O orçamento convertido não pode ser alterado.'; end if;
+  v_previous_status := v_request.status;
+  v_old_data := jsonb_build_object(
+    'productName', v_request.product_name, 'quantity', v_request.quantity, 'idea', v_request.idea,
+    'material', v_request.material, 'dimensions', v_request.dimensions, 'colors', v_request.colors,
+    'personalizations', v_request.personalizations, 'desiredDeadline', v_request.desired_deadline,
+    'additionalNotes', v_request.additional_notes, 'quoteAmount', v_request.quote_amount,
+    'internalNotes', v_request.internal_notes
+  );
+
+  update public.kelly_storefront_quote_requests_v1 set
+    product_name = trim(p_product_name), quantity = p_quantity, idea = trim(p_idea),
+    material = trim(coalesce(p_material,'')), dimensions = trim(coalesce(p_dimensions,'')),
+    colors = trim(coalesce(p_colors,'')), personalizations = trim(coalesce(p_personalizations,'')),
+    desired_deadline = p_desired_deadline, additional_notes = trim(coalesce(p_additional_notes,'')),
+    status = p_status, quote_amount = p_quote_amount, internal_notes = trim(coalesce(p_internal_notes,'')),
+    updated_at = now(),
+    status_history = coalesce(status_history, '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+      'previousStatus', v_previous_status, 'newStatus', p_status,
+      'note', coalesce(nullif(trim(p_history_note),''), 'Cadastro atualizado pelo administrador.'),
+      'previousData', v_old_data, 'quoteAmount', p_quote_amount,
+      'createdAt', now(), 'actorUserId', auth.uid()
+    ))
+    where id = p_quote_id returning * into v_request;
+  return to_jsonb(v_request);
+end;
+$$;
+
+-- Exclusão lógica: o registro e seu histórico continuam preservados no banco.
+create or replace function public.kelly_archive_custom_quote_request_v1(p_quote_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_request public.kelly_storefront_quote_requests_v1%rowtype;
+begin
+  if not public.kelly_is_storefront_admin_v1() then raise exception 'Acesso administrativo necessário.'; end if;
+  select * into v_request from public.kelly_storefront_quote_requests_v1 where id = p_quote_id for update;
+  if not found then raise exception 'Solicitação de orçamento não encontrada.'; end if;
+  if v_request.archived_at is not null then return to_jsonb(v_request); end if;
+  update public.kelly_storefront_quote_requests_v1 set archived_at = now(), updated_at = now(),
+    status_history = coalesce(status_history, '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+      'previousStatus', status, 'newStatus', status, 'note', 'Solicitação arquivada pelo administrador.',
+      'createdAt', now(), 'actorUserId', auth.uid(), 'archived', true
+    ))
+    where id = p_quote_id returning * into v_request;
+  return to_jsonb(v_request);
+end;
+$$;
+
+-- Conversão transacional e idempotente para o catálogo de pedidos já utilizado pela loja.
+create or replace function public.kelly_convert_custom_quote_request_v1(p_quote_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_request public.kelly_storefront_quote_requests_v1%rowtype;
+  v_order_id uuid;
+  v_order_number text;
+  v_unit_price numeric(12,2);
+  v_personalizations jsonb;
+  v_event jsonb;
+begin
+  if not public.kelly_is_storefront_admin_v1() then raise exception 'Acesso administrativo necessário.'; end if;
+  select * into v_request from public.kelly_storefront_quote_requests_v1 where id = p_quote_id for update;
+  if not found then raise exception 'Solicitação de orçamento não encontrada.'; end if;
+  if v_request.converted_order_id is not null then
+    return jsonb_build_object('quoteId', v_request.id, 'orderId', v_request.converted_order_id, 'alreadyConverted', true);
+  end if;
+  if v_request.archived_at is not null then raise exception 'Restaure o orçamento antes de convertê-lo.'; end if;
+  if v_request.status <> 'aprovado' then raise exception 'Marque o orçamento como aprovado antes da conversão.'; end if;
+  if v_request.quote_amount is null or v_request.quote_amount <= 0 then raise exception 'Defina um valor maior que zero antes de converter o orçamento.'; end if;
+
+  v_order_id := gen_random_uuid();
+  v_order_number := 'KP-' || to_char(now(), 'YYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 6));
+  v_unit_price := round(v_request.quote_amount / greatest(1, v_request.quantity), 2);
+  v_personalizations := jsonb_build_object(
+    'material', v_request.material,
+    'dimensions', v_request.dimensions,
+    'colors', v_request.colors,
+    'personalizations', v_request.personalizations,
+    'desiredDeadline', v_request.desired_deadline,
+    'quoteNumber', v_request.quote_number
+  );
+
+  insert into public.kelly_storefront_orders_v1 (
+    id, order_number, customer_name, customer_whatsapp, product_id, product_name, quantity,
+    personalizations, customer_text, theme_colors, notes, reference_path, estimated_unit_price,
+    estimated_total, status, created_at, updated_at
+  ) values (
+    v_order_id, v_order_number, v_request.customer_name, v_request.customer_whatsapp,
+    coalesce(v_request.product_id, 'custom-quote-' || v_request.id::text), v_request.product_name,
+    v_request.quantity, v_personalizations, v_request.idea, v_request.colors,
+    trim(concat_ws(E'\n', nullif(v_request.additional_notes,''), 'Orçamento: ' || v_request.quote_number)),
+    v_request.reference_path, v_unit_price, v_request.quote_amount, 'novo', now(), now()
+  );
+
+  insert into public.kelly_storefront_order_history_v1 (order_id, previous_status, new_status, note, actor_user_id)
+  values (v_order_id, null, 'novo', 'Pedido criado a partir do orçamento ' || v_request.quote_number || '.', auth.uid());
+
+  v_event := jsonb_build_object('previousStatus', v_request.status, 'newStatus', 'convertido_em_pedido',
+    'note', 'Orçamento convertido no pedido ' || v_order_number || '.', 'orderId', v_order_id,
+    'createdAt', now(), 'actorUserId', auth.uid());
+  update public.kelly_storefront_quote_requests_v1 set
+    status = 'convertido_em_pedido', converted_order_id = v_order_id, updated_at = now(),
+    status_history = coalesce(status_history, '[]'::jsonb) || jsonb_build_array(v_event)
+    where id = p_quote_id;
+
+  return jsonb_build_object('quoteId', p_quote_id, 'orderId', v_order_id,
+    'orderNumber', v_order_number, 'alreadyConverted', false);
+end;
+$$;
+
+revoke all on function public.kelly_submit_custom_quote_request_v1(uuid,text,text,text,text,integer,text,text,text,text,text,date,text) from public;
+grant execute on function public.kelly_submit_custom_quote_request_v1(uuid,text,text,text,text,integer,text,text,text,text,text,date,text) to anon, authenticated;
+revoke all on function public.kelly_can_upload_custom_quote_reference_v1(text) from public;
+grant execute on function public.kelly_can_upload_custom_quote_reference_v1(text) to anon, authenticated;
+revoke all on function public.kelly_set_custom_quote_reference_v1(uuid,text) from public;
+grant execute on function public.kelly_set_custom_quote_reference_v1(uuid,text) to anon, authenticated;
+revoke all on function public.kelly_get_custom_quote_requests_v1(boolean) from public, anon;
+grant execute on function public.kelly_get_custom_quote_requests_v1(boolean) to authenticated;
+revoke all on function public.kelly_update_custom_quote_request_v1(uuid,text,integer,text,text,text,text,text,date,text,text,numeric,text,text) from public, anon;
+grant execute on function public.kelly_update_custom_quote_request_v1(uuid,text,integer,text,text,text,text,text,date,text,text,numeric,text,text) to authenticated;
+revoke all on function public.kelly_archive_custom_quote_request_v1(uuid) from public, anon;
+grant execute on function public.kelly_archive_custom_quote_request_v1(uuid) to authenticated;
+revoke all on function public.kelly_convert_custom_quote_request_v1(uuid) from public, anon;
+grant execute on function public.kelly_convert_custom_quote_request_v1(uuid) to authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname = 'kelly_private_quote_assets_insert_public_request_v1'
+  ) then
+    create policy kelly_private_quote_assets_insert_public_request_v1
+      on storage.objects for insert to anon, authenticated
+      with check (
+        bucket_id = 'kelly_private_quote_assets_v1'
+        and public.kelly_can_upload_custom_quote_reference_v1(name)
+      );
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname = 'kelly_private_quote_assets_select_admin_v1'
+  ) then
+    create policy kelly_private_quote_assets_select_admin_v1
+      on storage.objects for select to authenticated
+      using (bucket_id = 'kelly_private_quote_assets_v1' and public.kelly_is_storefront_admin_v1());
+  end if;
+end
+$$;

@@ -5,6 +5,8 @@ export const STORE_ROUTES = {
   adminLogin: '/admin/login',
   adminOrders: '/admin/pedidos',
   adminUsers: '/admin/usuarios',
+  adminQuoteRequests: '/admin/solicitacoes-orcamento',
+  customQuote: '/loja/orcamento-personalizado',
 } as const;
 
 export interface StorefrontRoute {
@@ -12,6 +14,8 @@ export interface StorefrontRoute {
   productId: string | null;
   isOrderPage: boolean;
   orderProductId: string | null;
+  isCustomQuotePage: boolean;
+  quoteProductId: string | null;
 }
 
 export function productDetailPath(name: string, productId: string): string {
@@ -23,12 +27,26 @@ export function productOrderPath(productId: string): string {
   return '/loja/pedido/' + encodeURIComponent(productId);
 }
 
+export function customQuotePath(productId?: string | null): string {
+  return STORE_ROUTES.customQuote + (productId ? '?produto=' + encodeURIComponent(productId) : '');
+}
+
 export function resolveStorefrontRoute(pathname: string, search: string): StorefrontRoute {
-  const isProductPage = pathname.startsWith('/loja/produtos/');
-  const isOrderPage = pathname.startsWith('/loja/pedido/');
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+  const isProductPage = normalizedPath.startsWith('/loja/produtos/');
+  const isOrderPage = normalizedPath.startsWith('/loja/pedido/');
+  const isCustomQuotePage = normalizedPath === STORE_ROUTES.customQuote;
   let orderProductId: string | null = null;
   if (isOrderPage) {
-    try { orderProductId = decodeURIComponent(pathname.slice('/loja/pedido/'.length)); } catch { orderProductId = null; }
+    try { orderProductId = decodeURIComponent(normalizedPath.slice('/loja/pedido/'.length)); } catch { orderProductId = null; }
   }
-  return { isProductPage, productId: isProductPage ? new URLSearchParams(search).get('id') : null, isOrderPage, orderProductId };
+  const params = new URLSearchParams(search);
+  return {
+    isProductPage,
+    productId: isProductPage ? params.get('id') : null,
+    isOrderPage,
+    orderProductId,
+    isCustomQuotePage,
+    quoteProductId: isCustomQuotePage ? params.get('produto') : null,
+  };
 }

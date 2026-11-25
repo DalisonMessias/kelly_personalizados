@@ -11,7 +11,8 @@ import {
   submitStorefrontOrder,
   uploadStorefrontReference,
 } from '../../services/storefrontService';
-import { productDetailPath, productOrderPath, resolveStorefrontRoute, STORE_ROUTES } from '../../routes';
+import { customQuotePath, productDetailPath, productOrderPath, resolveStorefrontRoute, STORE_ROUTES } from '../../routes';
+import { CustomQuoteRequestForm } from './CustomQuoteRequestForm';
 
 interface StorefrontPageProps {
   pathname: string;
@@ -107,18 +108,21 @@ export function StorefrontPage({ pathname, search, onNavigate }: StorefrontPageP
           </button>
           <nav className="flex items-center gap-2 sm:gap-5">
             <button type="button" onClick={goToCatalog} className="hidden text-sm font-semibold text-slate-600 hover:text-pink-700 sm:block">Produtos</button>
-            <button type="button" onClick={() => onNavigate(STORE_ROUTES.adminLogin)} className="rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-50 sm:px-4 sm:text-sm">Acesso administrativo</button>
+            <button type="button" onClick={() => onNavigate(customQuotePath())} className="shrink-0 rounded-xl bg-pink-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-pink-700 sm:px-4 sm:text-sm"><span className="sm:hidden">Orçamento</span><span className="hidden sm:inline">Orçamento personalizado</span></button>
+            <button type="button" onClick={() => onNavigate(STORE_ROUTES.adminLogin)} className="shrink-0 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-50 sm:px-4 sm:text-sm"><span className="sm:hidden">Admin</span><span className="hidden sm:inline">Acesso administrativo</span></button>
           </nav>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 sm:pt-10 lg:px-8">
-        {route.isOrderPage && selectedProduct ? (
+        {route.isCustomQuotePage ? (
+          <CustomQuoteRequestForm products={catalog.products} initialProductId={route.quoteProductId} onBack={goToCatalog} />
+        ) : route.isOrderPage && selectedProduct ? (
           <OrderRequestForm product={selectedProduct} onBack={() => goToProduct(selectedProduct)} onSubmitted={(result) => { setOrderConfirmation(result); success('Solicitação registrada', `Seu protocolo é ${result.orderNumber}.`); }} onError={(message) => error('Não foi possível enviar', message)} />
         ) : route.isOrderPage && !loading ? (
           <EmptyMessage title="Produto não encontrado" description="Esse produto não está disponível para solicitação." onBack={goToCatalog} />
         ) : route.isProductPage && selectedProduct ? (
-          <ProductDetails product={selectedProduct} onBack={goToCatalog} onOrder={() => onNavigate(productOrderPath(selectedProduct.id))} />
+          <ProductDetails product={selectedProduct} onBack={goToCatalog} onOrder={() => onNavigate(productOrderPath(selectedProduct.id))} onCustomQuote={() => onNavigate(customQuotePath(selectedProduct.id))} />
         ) : route.isProductPage && !loading ? (
           <EmptyMessage title="Produto não encontrado" description="Esse produto pode ter sido removido ou não está mais publicado." onBack={goToCatalog} />
         ) : (
@@ -132,6 +136,7 @@ export function StorefrontPage({ pathname, search, onNavigate }: StorefrontPageP
             onQueryChange={setQuery}
             onCategoryChange={setCategoryFilter}
             onProductClick={goToProduct}
+            onCustomQuote={() => onNavigate(customQuotePath())}
             onRetry={() => { setLoading(true); setLoadMessage(''); void getStorefrontCatalog().then(setCatalog).catch(() => setLoadMessage('Não foi possível carregar os produtos agora.')).finally(() => setLoading(false)); }}
           />
         )}
@@ -163,7 +168,7 @@ export function StorefrontPage({ pathname, search, onNavigate }: StorefrontPageP
 }
 
 function CatalogHome({
-  products, categories, loading, loadMessage, query, categoryFilter, onQueryChange, onCategoryChange, onProductClick, onRetry,
+  products, categories, loading, loadMessage, query, categoryFilter, onQueryChange, onCategoryChange, onProductClick, onCustomQuote, onRetry,
 }: {
   products: StorefrontProduct[];
   categories: string[];
@@ -174,6 +179,7 @@ function CatalogHome({
   onQueryChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
   onProductClick: (product: StorefrontProduct) => void;
+  onCustomQuote: () => void;
   onRetry: () => void;
 }) {
   return (
@@ -184,7 +190,7 @@ function CatalogHome({
           <span className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-pink-700"><Sparkles className="h-3.5 w-3.5" /> Papelaria personalizada</span>
           <h1 className="mt-5 text-4xl font-black leading-[1.05] tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">Detalhes que deixam sua comemoração inesquecível.</h1>
           <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">Explore os produtos da Kelly Personalizados e peça uma criação com o seu tema, suas cores e o seu jeito.</p>
-          <button type="button" onClick={() => document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' })} className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-pink-600 px-5 text-sm font-bold text-white shadow-lg shadow-pink-600/20 transition hover:-translate-y-0.5 hover:bg-pink-700">Ver produtos <ArrowRight className="h-4 w-4" /></button>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row"><button type="button" onClick={() => document.getElementById('catalogo')?.scrollIntoView({ behavior: 'smooth' })} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-pink-600 px-5 text-sm font-bold text-white shadow-lg shadow-pink-600/20 transition hover:-translate-y-0.5 hover:bg-pink-700">Ver produtos <ArrowRight className="h-4 w-4" /></button><button type="button" onClick={onCustomQuote} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white bg-white/80 px-5 text-sm font-bold text-pink-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-white"><Sparkles className="h-4 w-4" /> Criar algo personalizado</button></div>
         </div>
       </section>
 
@@ -227,7 +233,7 @@ function ProductCard({ product, onClick }: { product: StorefrontProduct; onClick
   );
 }
 
-function ProductDetails({ product, onBack, onOrder }: { product: StorefrontProduct; onBack: () => void; onOrder: () => void }) {
+function ProductDetails({ product, onBack, onOrder, onCustomQuote }: { product: StorefrontProduct; onBack: () => void; onOrder: () => void; onCustomQuote: () => void }) {
   const [activeImage, setActiveImage] = useState(0);
   const imageUrls = product.imageIds.map((id) => ({ id, url: getStoreProductImageUrl(product.id, id) })).filter((item): item is { id: string; url: string } => Boolean(item.url));
   const price = unitEstimate(product);
@@ -254,6 +260,7 @@ function ProductDetails({ product, onBack, onOrder }: { product: StorefrontProdu
           </div>
           {product.personalizationOptions.length > 0 && <div className="mt-5"><h2 className="text-sm font-extrabold">Personalize do seu jeito</h2><div className="mt-2 flex flex-wrap gap-2">{product.personalizationOptions.map((option) => <span key={option.id} className="rounded-full border border-rose-100 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">{option.name}</span>)}</div></div>}
           <button type="button" onClick={onOrder} className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-pink-600 px-5 text-sm font-bold text-white shadow-lg shadow-pink-600/20 transition hover:-translate-y-0.5 hover:bg-pink-700">Solicitar este produto <ArrowRight className="h-4 w-4" /></button>
+          <button type="button" onClick={onCustomQuote} className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-pink-200 bg-white px-5 text-sm font-bold text-pink-700 transition hover:bg-pink-50"><Sparkles className="h-4 w-4" /> Pedir uma versão personalizada</button>
           <p className="mt-3 text-center text-xs text-slate-400">Sem cadastro. Você receberá o retorno pelo WhatsApp.</p>
         </div>
       </div>

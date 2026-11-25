@@ -12,6 +12,7 @@ import {
   Users,
   ShoppingBag,
   ClipboardList,
+  FileText,
   ExternalLink,
   WandSparkles,
   LogOut,
@@ -21,7 +22,7 @@ import { supabase } from '../../services/supabase';
 import { createSystemBackup, downloadSystemBackup } from '../../services/systemBackupService';
 import { useToast } from '../ui/Toast';
 
-export type NavTab = 'dashboard' | 'calculator' | 'catalog' | 'history' | 'assistant' | 'art-prompt' | 'clients' | 'store-products' | 'store-orders' | 'settings' | 'users';
+export type NavTab = 'dashboard' | 'calculator' | 'catalog' | 'history' | 'assistant' | 'art-prompt' | 'clients' | 'store-products' | 'store-orders' | 'quote-requests' | 'settings' | 'users';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -64,6 +65,7 @@ export function Sidebar({ currentTab, onSelectTab, shopName, onLogoutAttempt }: 
     { id: 'catalog', label: 'Catálogo de Serviços', icon: <FolderKanban className="w-5 h-5" /> },
     { id: 'store-products', label: 'Catálogo de Produtos', icon: <ShoppingBag className="w-5 h-5" /> },
     { id: 'store-orders', label: 'Pedidos da Loja', icon: <ClipboardList className="w-5 h-5" /> },
+    { id: 'quote-requests', label: 'Solicitações de Orçamento', icon: <FileText className="w-5 h-5" /> },
     { id: 'history', label: 'Histórico de Cálculos', icon: <History className="w-5 h-5" /> },
     { id: 'assistant', label: 'Assistente IA', icon: <BrainCircuit className="w-5 h-5" /> },
     { id: 'art-prompt', label: 'Assistente de Artes', icon: <WandSparkles className="w-5 h-5" /> },
