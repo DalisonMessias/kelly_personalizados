@@ -290,7 +290,10 @@ export function ClientsPage({ products, initialCustomerId, initialProduct, onNew
       };
 
       const targetQuoteId = quoteId || editingQuoteId || `draft-${Date.now()}`;
-      await putAttachment(targetQuoteId, metadata, file);
+      const cloudSaved = await putAttachment(targetQuoteId, metadata, file);
+      if (!cloudSaved) {
+        warning('Imagem salva no cache local', 'A imagem foi mantida neste navegador e será enviada ao Supabase quando houver conexão.');
+      }
       additions.push(metadata);
     }
 

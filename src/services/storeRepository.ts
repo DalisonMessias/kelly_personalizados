@@ -5,6 +5,7 @@ import {
   StoreProduct,
   StoreProductAddon,
 } from '../types';
+import { writeCacheValue } from './appDataSync';
 
 const KEYS = {
   PRODUCTS: 'kelly_store_products_v1',
@@ -32,7 +33,7 @@ function readArray<T>(key: string): T[] {
 }
 
 function writeArray<T>(key: string, value: T[]): void {
-  localStorage.setItem(key, JSON.stringify(value));
+  writeCacheValue(key, JSON.stringify(value));
 }
 
 function uniqueId(prefix: string): string {

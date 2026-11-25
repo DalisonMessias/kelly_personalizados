@@ -7,10 +7,11 @@ import { AppSettings } from '../../types';
 interface LayoutProps {
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
+  onLogoutAttempt: () => boolean;
   children: React.ReactNode;
 }
 
-export function Layout({ currentTab, onSelectTab, children }: LayoutProps) {
+export function Layout({ currentTab, onSelectTab, onLogoutAttempt, children }: LayoutProps) {
   const [settings, setSettings] = useState<AppSettings>(storageService.getSettings());
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export function Layout({ currentTab, onSelectTab, children }: LayoutProps) {
         currentTab={currentTab}
         onSelectTab={onSelectTab}
         shopName={settings.shopName}
+        onLogoutAttempt={onLogoutAttempt}
       />
 
       {/* Navegação e header para mobile */}
@@ -35,6 +37,7 @@ export function Layout({ currentTab, onSelectTab, children }: LayoutProps) {
         currentTab={currentTab}
         onSelectTab={onSelectTab}
         shopName={settings.shopName}
+        onLogoutAttempt={onLogoutAttempt}
       />
 
       {/* Área de conteúdo principal */}

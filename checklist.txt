@@ -39,3 +39,67 @@
 - [x] Atualização completa do README.md com a marca Kelly Personalizados e manual do campo opcional de Desconto (%)
 - [x] Conclusão e homologação de todas as tarefas da solicitação no arquivo documentation/TASK_LIST.md
 - [x] Inclusão da importação do ícone Sparkles no componente CalculatorPage.tsx e inicialização da base de conhecimento documentation/continuous_learning_skills.md
+
+- [x] Revisão inicial do checklist e da documentação do projeto para planejar a integração de persistência com Supabase (documentation/TASK_LIST.md e documentation/continuous_learning_skills.md)
+
+- [x] Criação da migração aditiva com histórico de versões por usuário, regras de acesso e armazenamento privado de anexos (supabase/migrations/supabase_global_part3.sql)
+- [x] Integração da sincronização de produtos, cálculos, configurações, conversas, ordens, clientes, orçamentos, etiquetas e dados da loja entre Supabase e cache local (src/services/appDataSync.ts, src/services/storage.ts e src/services/storeRepository.ts)
+- [x] Sincronização por conta e carregamento dos dados antes da abertura do sistema, com fila local para retomada de sincronização (src/contexts/AuthContext.tsx)
+- [x] Envio e recuperação de anexos usando armazenamento privado do Supabase, mantendo cópia local (src/services/attachmentDb.ts e src/components/clients/ClientsPage.tsx)
+- [x] Exibição do estado da sincronização nas configurações e atualização final do plano desta solicitação (src/components/settings/SettingsPage.tsx e documentation/TASK_LIST.md)
+
+- [x] Revisão do checklist, da documentação técnica e dos arquivos indicados para corrigir os avisos do TypeScript (documentation/TASK_LIST.md e documentation/continuous_learning_skills.md)
+- [x] Ajuste dos imports de useState e useCallback e fechamento completo do componente App (src/App.tsx)
+- [x] Remoção de baseUrl descontinuado e preservação do alias por caminho relativo (tsconfig.json)
+- [x] Registro incremental da causa e solução na base de conhecimento técnica (documentation/continuous_learning_skills.md)
+- [x] Finalização do plano e registro das etapas concluídas para esta solicitação (documentation/TASK_LIST.md e checklist.txt)
+
+- [x] Revisão do checklist, da base de conhecimento e do cliente Supabase antes do ajuste de configuração (documentation/TASK_LIST.md e src/services/supabase.ts)
+- [x] Configuração direta da URL pública do projeto e da chave publicável no cliente Supabase (src/services/supabase.ts)
+- [x] Remoção das configurações Supabase dos arquivos .env.local e .env.example
+- [x] Registro da causa, solução e prevenção na base de conhecimento (documentation/continuous_learning_skills.md)
+- [x] Conclusão do plano e registro das etapas desta solicitação (documentation/TASK_LIST.md e checklist.txt)
+
+- [x] Revisão do checklist, da base de conhecimento e da seção de conta em SettingsPage.tsx antes de implementar a saída (documentation/TASK_LIST.md e src/components/settings/SettingsPage.tsx)
+- [x] Implementação do encerramento de sessão via Supabase e retorno pelo Toast do sistema (src/components/settings/SettingsPage.tsx)
+- [x] Registro da solução e prevenção na base de conhecimento técnica (documentation/continuous_learning_skills.md)
+- [x] Conclusão do plano e registro final desta solicitação (documentation/TASK_LIST.md e checklist.txt)
+
+- [x] Revisão do checklist, da documentação, da tipagem do Vite e dos menus desktop e móvel antes das alterações (documentation/TASK_LIST.md, src/main.tsx, src/components/layout/Sidebar.tsx e src/components/layout/MobileNav.tsx)
+- [x] Inclusão da declaração de tipos do cliente Vite para os arquivos CSS do projeto (src/vite-env.d.ts)
+- [x] Inclusão da ação Sair da conta no menu lateral e no painel móvel com sessão Supabase e Toast (src/components/layout/Sidebar.tsx e src/components/layout/MobileNav.tsx)
+- [x] Registro das causas, soluções e prevenção na base de conhecimento técnica (documentation/continuous_learning_skills.md)
+- [x] Conclusão do plano e registro final desta solicitação (documentation/TASK_LIST.md e checklist.txt)
+
+- [x] Revisão do checklist, dos estilos globais e da tela de autenticação antes da modernização visual (documentation/TASK_LIST.md, src/index.css e src/components/auth/AuthPage.tsx)
+- [x] Modernização responsiva da tela de acesso com alternância entre entrar e criar conta, preservando autenticação Supabase (src/components/auth/AuthPage.tsx)
+- [x] Inclusão de fundo em movimento suave, entrada animada do cartão, estados visuais dos campos e suporte a movimento reduzido (src/index.css)
+- [x] Atualização final do plano e registro das tarefas concluídas sem remover o histórico anterior (documentation/TASK_LIST.md e checklist.txt)
+
+- [x] Revisão inicial do checklist, do plano anterior, da base técnica e da arquitetura de autenticação, catálogo e sincronização para iniciar a loja pública (documentation/TASK_LIST.md e documentação do projeto)
+
+- [x] Criação aditiva de cadastro do administrador principal, solicitações públicas, histórico de status, regras de acesso e armazenamento da loja em supabase/migrations/supabase_global_part3.sql
+- [x] Criação dos serviços Supabase para catálogo público filtrado, envio validado de pedidos, imagens dos produtos e referências privadas (src/services/storefrontService.ts)
+- [x] Implementação da vitrine responsiva com busca, categorias, detalhes, galeria, personalização, estimativa e envio sem cadastro (src/components/storefront/StorefrontPage.tsx)
+- [x] Implementação do painel autenticado de pedidos, atualização de situação e histórico, com acesso nos menus e no painel inicial (src/components/storefront/StorefrontOrdersPage.tsx, src/components/layout/Sidebar.tsx, src/components/layout/MobileNav.tsx e src/components/dashboard/Dashboard.tsx)
+- [x] Integração das rotas públicas e administrativas, restrição do login ao acesso existente e publicação de fotos pelo cadastro de produtos (src/routes.ts, src/App.tsx, src/components/auth/AuthPage.tsx e src/components/store-products/StoreProductsPage.tsx)
+- [x] Verificação estática do TypeScript concluída com zero diagnósticos e conferência de que a migração não contém comandos de remoção de dados
+- [x] Registro da causa e solução de tipagem na base técnica e conclusão do plano desta loja pública (documentation/continuous_learning_skills.md e documentation/TASK_LIST.md)
+
+- [x] Revisão inicial da documentação, do checklist, da autenticação, da persistência Supabase e da Central de Backup para identificar apenas lacunas da solicitação atual (documentation/TASK_LIST.md, src/components/settings/SettingsPage.tsx, src/services/storage.ts e supabase/migrations/supabase_global_part3.sql)
+
+- [x] Inclusão aditiva de campos de função e atividade, auditoria de acesso e histórico de cópias no esquema global da parte 3, sem remover tabelas ou registros (supabase/migrations/supabase_global_part3.sql)
+- [x] Criação de funções hospedadas protegidas para listar, criar, editar, ativar, desativar e registrar remoções de acesso, com bloqueio de autoexclusão e do último administrador ativo (supabase/functions/manage-admin-users/index.ts e supabase/functions/_shared/admin.ts)
+- [x] Compartilhamento dos dados da conta principal entre administradores ativos e confirmação síncrona do salvamento de parâmetros no Supabase (src/services/appDataSync.ts e src/components/settings/SettingsPage.tsx)
+- [x] Implementação de cópias completas no servidor com histórico, verificação SHA-256, importação validada e restauração transacional aditiva de pedidos e snapshots (supabase/functions/system-backup/index.ts e src/services/systemBackupService.ts)
+- [x] Inclusão da página de gerenciamento de usuários nas rotas, nos menus e no painel inicial, com datas, edição, alternância de estado e modais personalizados (src/components/users/UserManagementPage.tsx, src/routes.ts, src/components/layout/Sidebar.tsx, src/components/layout/MobileNav.tsx e src/components/dashboard/Dashboard.tsx)
+- [x] Ajuste da restauração de parâmetros para preservar produtos, pedidos, clientes e históricos, além de confirmação personalizada ao abandonar alterações sem salvar (src/components/settings/SettingsPage.tsx e src/App.tsx)
+- [x] Verificação estática concluída com zero diagnósticos TypeScript na aplicação e nas funções hospedadas; conferência das adições do esquema e da ausência de senha especial no código do navegador
+- [x] Consolidação dos snapshots anteriores de contas administrativas na conta principal com novas inserções, preservando todas as versões de origem e priorizando a conta principal em identificadores repetidos (supabase/migrations/supabase_global_part3.sql)
+
+- [x] Revisão inicial do checklist, da documentação e das chamadas às funções hospedadas; confirmação da resposta do projeto Supabase para a função de cópias (documentation/TASK_LIST.md, src/services/systemBackupService.ts e supabase/functions/system-backup/index.ts)
+- [x] Tradução das respostas de comunicação das funções Supabase, indicação de função não publicada e prevenção de carregamentos duplicados no modo de desenvolvimento (src/services/supabaseFunctionErrors.ts, src/services/adminManagementService.ts, src/services/systemBackupService.ts, src/components/users/UserManagementPage.tsx e src/components/settings/SettingsPage.tsx)
+- [x] Verificação TypeScript concluída com zero diagnósticos e confirmação HTTP de que as funções manage-admin-users e system-backup ainda não estão publicadas no projeto conectado
+- [x] Reconfirmação da causa do aviso: as funções existem no código local, mas a publicação remota ainda está pendente no projeto zssyrupllztulugvibzh; registrados os comandos de publicação direcionados ao projeto (documentation/TASK_LIST.md)
+- [x] Conferência da falha ao publicar: o terminal não reconhece o comando `supabase`; a ferramenta não foi localizada nos caminhos comuns conferidos e não foi encontrada sessão salva no caminho padrão (documentation/TASK_LIST.md)
+- [x] Confirmação de que a ferramenta `supabase` já está incluída em `devDependencies` e no arquivo de dependências travadas; adicionados comandos npm para autenticar e publicar as duas funções usando a instalação local do projeto (package.json)

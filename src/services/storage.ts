@@ -1,5 +1,6 @@
 import { AppBackupData, AppSettings, CalculationRecord, ChatConversation, Customer, CustomerQuote, ProductService, QuoteTag, ServiceOrder } from '../types';
 import { storeRepository } from './storeRepository';
+import { writeCacheValue } from './appDataSync';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'kelly_calc_products_v4',
@@ -53,7 +54,7 @@ export const storageService = {
 
   saveSettings(settings: AppSettings): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+      writeCacheValue(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
     } catch (e) {
       console.error('Falha ao salvar configurações:', e);
     }
@@ -74,7 +75,7 @@ export const storageService = {
 
   saveAllProducts(products: ProductService[]): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+      writeCacheValue(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
     } catch (e) {
       console.error('Falha ao salvar produtos:', e);
     }
@@ -152,7 +153,7 @@ export const storageService = {
 
     const updated = [newRecord, ...records];
     try {
-      localStorage.setItem(STORAGE_KEYS.CALCULATIONS, JSON.stringify(updated));
+      writeCacheValue(STORAGE_KEYS.CALCULATIONS, JSON.stringify(updated));
     } catch (e) {
       console.error('Falha ao salvar cálculo no histórico:', e);
     }
@@ -163,7 +164,7 @@ export const storageService = {
     const records = this.getCalculations();
     const updated = records.filter((r) => r.id !== id);
     try {
-      localStorage.setItem(STORAGE_KEYS.CALCULATIONS, JSON.stringify(updated));
+      writeCacheValue(STORAGE_KEYS.CALCULATIONS, JSON.stringify(updated));
     } catch (e) {
       console.error('Falha ao excluir histórico:', e);
     }
@@ -182,7 +183,7 @@ export const storageService = {
 
   saveChatConversations(conversations: ChatConversation[]): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.CHAT_CONVERSATIONS, JSON.stringify(conversations));
+      writeCacheValue(STORAGE_KEYS.CHAT_CONVERSATIONS, JSON.stringify(conversations));
     } catch (e) {
       console.error('Falha ao salvar conversas:', e);
     }
@@ -207,7 +208,7 @@ export const storageService = {
   saveServiceOrder(order: ServiceOrder): ServiceOrder[] {
     const updated = [order, ...this.getServiceOrders()];
     try {
-      localStorage.setItem(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify(updated));
+      writeCacheValue(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify(updated));
     } catch (e) {
       console.error('Falha ao salvar ordem de serviço:', e);
     }
@@ -217,7 +218,7 @@ export const storageService = {
   deleteServiceOrder(id: string): ServiceOrder[] {
     const updated = this.getServiceOrders().filter((order) => order.id !== id);
     try {
-      localStorage.setItem(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify(updated));
+      writeCacheValue(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify(updated));
     } catch (e) {
       console.error('Falha ao excluir ordem de serviço:', e);
     }
@@ -241,13 +242,13 @@ export const storageService = {
     const updated = existingIndex >= 0
       ? customers.map((item) => item.id === customer.id ? { ...customer, updatedAt: now } : item)
       : [{ ...customer, id: customer.id || `client-${Date.now()}`, createdAt: now, updatedAt: now }, ...customers];
-    localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(updated));
+    writeCacheValue(STORAGE_KEYS.CUSTOMERS, JSON.stringify(updated));
     return updated;
   },
 
   deleteCustomer(id: string): Customer[] {
     const updated = this.getCustomers().filter((customer) => customer.id !== id);
-    localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(updated));
+    writeCacheValue(STORAGE_KEYS.CUSTOMERS, JSON.stringify(updated));
     return updated;
   },
 
@@ -268,13 +269,13 @@ export const storageService = {
     const updated = existingIndex >= 0
       ? quotes.map((item) => item.id === quote.id ? { ...quote, updatedAt: now } : item)
       : [{ ...quote, id: quote.id || `quote-${Date.now()}`, createdAt: now, updatedAt: now }, ...quotes];
-    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(updated));
+    writeCacheValue(STORAGE_KEYS.QUOTES, JSON.stringify(updated));
     return updated;
   },
 
   deleteQuote(id: string): CustomerQuote[] {
     const updated = this.getQuotes().filter((quote) => quote.id !== id);
-    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(updated));
+    writeCacheValue(STORAGE_KEYS.QUOTES, JSON.stringify(updated));
     return updated;
   },
 
@@ -298,7 +299,7 @@ export const storageService = {
   },
 
   saveQuoteTags(tags: QuoteTag[]): void {
-    localStorage.setItem(STORAGE_KEYS.QUOTE_TAGS, JSON.stringify(tags));
+    writeCacheValue(STORAGE_KEYS.QUOTE_TAGS, JSON.stringify(tags));
   },
 
   // Backup e Restauração de Dados
@@ -350,7 +351,7 @@ export const storageService = {
       this.saveAllProducts(data.products);
 
       if (Array.isArray(data.calculations)) {
-        localStorage.setItem(STORAGE_KEYS.CALCULATIONS, JSON.stringify(data.calculations));
+        writeCacheValue(STORAGE_KEYS.CALCULATIONS, JSON.stringify(data.calculations));
       }
 
       if (data.settings) {
@@ -362,15 +363,15 @@ export const storageService = {
       }
 
       if (Array.isArray(data.serviceOrders)) {
-        localStorage.setItem(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify(data.serviceOrders));
+        writeCacheValue(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify(data.serviceOrders));
       }
 
       if (Array.isArray(data.customers)) {
-        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(data.customers));
+        writeCacheValue(STORAGE_KEYS.CUSTOMERS, JSON.stringify(data.customers));
       }
 
       if (Array.isArray(data.quotes)) {
-        localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(data.quotes));
+        writeCacheValue(STORAGE_KEYS.QUOTES, JSON.stringify(data.quotes));
       }
 
       if (Array.isArray(data.quoteTags)) {
@@ -396,18 +397,18 @@ export const storageService = {
   },
 
   resetAllData(): void {
-    localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
-    localStorage.removeItem(STORAGE_KEYS.CALCULATIONS);
-    localStorage.removeItem(STORAGE_KEYS.SETTINGS);
-    localStorage.removeItem(STORAGE_KEYS.CHAT_CONVERSATIONS);
-    localStorage.removeItem(STORAGE_KEYS.SERVICE_ORDERS);
-    localStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
-    localStorage.removeItem(STORAGE_KEYS.QUOTES);
-    localStorage.removeItem(STORAGE_KEYS.QUOTE_TAGS);
-    localStorage.removeItem('kelly_store_products_v1');
-    localStorage.removeItem('kelly_store_categories_v1');
-    localStorage.removeItem('kelly_future_orders_v1');
-    localStorage.removeItem('kelly_store_change_history_v1');
+    writeCacheValue(STORAGE_KEYS.PRODUCTS, JSON.stringify([]));
+    writeCacheValue(STORAGE_KEYS.CALCULATIONS, JSON.stringify([]));
+    writeCacheValue(STORAGE_KEYS.SETTINGS, JSON.stringify([]));
+    writeCacheValue(STORAGE_KEYS.CHAT_CONVERSATIONS, JSON.stringify([]));
+    writeCacheValue(STORAGE_KEYS.SERVICE_ORDERS, JSON.stringify([]));
+    writeCacheValue(STORAGE_KEYS.CUSTOMERS, JSON.stringify([]));
+    writeCacheValue(STORAGE_KEYS.QUOTES, JSON.stringify([]));
+    writeCacheValue(STORAGE_KEYS.QUOTE_TAGS, JSON.stringify([]));
+    writeCacheValue('kelly_store_products_v1', JSON.stringify([]));
+    writeCacheValue('kelly_store_categories_v1', JSON.stringify([]));
+    writeCacheValue('kelly_future_orders_v1', JSON.stringify([]));
+    writeCacheValue('kelly_store_change_history_v1', JSON.stringify([]));
     this.saveSettings(DEFAULT_SETTINGS);
     this.saveAllProducts([]);
   },

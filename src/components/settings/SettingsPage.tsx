@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import { supabase } from '../../services/supabase';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { 
   Settings, 
   DownloadCloud, 
@@ -15,39 +16,319 @@ import {
 } from 'lucide-react';
 import { AppSettings } from '../../types';
 import { storageService, DEFAULT_SETTINGS } from '../../services/storage';
+import {
+  applyCloudDataValueLocally,
+  CloudDataSnapshot,
+  flushPendingCloudData,
+  getLatestCloudDataSnapshot,
+  hasPendingCloudData,
+  saveCacheValueAndWait,
+  subscribeToCloudDataSnapshots,
+  useDataSyncStatus,
+} from '../../services/appDataSync';
 import { CustomModal } from '../ui/CustomModal';
 import { useToast } from '../ui/Toast';
 import { CurrencyInput } from '../ui/CurrencyInput';
 import { PercentInput } from '../ui/PercentInput';
+import {
+  createSystemBackup,
+  downloadSystemBackup,
+  getSystemBackup,
+  listSystemBackups,
+  restoreSystemBackup,
+  SystemBackup,
+  SystemBackupHistoryItem,
+  validateSystemBackup,
+} from '../../services/systemBackupService';
 
 interface SettingsPageProps {
   onRefreshAllData: () => void;
+  onUnsavedChangesChange: (hasChanges: boolean) => void;
 }
 
-export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
+const SETTINGS_DATA_KEY = 'kelly_calc_settings_v4';
+
+function normalizeSettings(value: unknown): AppSettings {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { ...DEFAULT_SETTINGS };
+  return { ...DEFAULT_SETTINGS, ...(value as Partial<AppSettings>) };
+}
+
+function compareSnapshots(left: CloudDataSnapshot, right: CloudDataSnapshot): number {
+  const dateDifference = Date.parse(left.created_at) - Date.parse(right.created_at);
+  return dateDifference || left.id.localeCompare(right.id);
+}
+
+export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: SettingsPageProps) {
   const { success, error, warning } = useToast();
+  const dataSync = useDataSyncStatus();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [settings, setSettings] = useState<AppSettings>(storageService.getSettings());
+  const [settings, setSettings] = useState<AppSettings>(() => storageService.getSettings());
+  const [savedSettings, setSavedSettings] = useState<AppSettings>(() => storageService.getSettings());
+  const [saveState, setSaveState] = useState<'salvo' | 'alterado' | 'salvando' | 'falha'>('salvo');
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
+  const [realtimeState, setRealtimeState] = useState<'conectando' | 'conectado' | 'indisponivel'>('conectando');
+  const [hasRemoteConflict, setHasRemoteConflict] = useState(false);
+  const [settingsLoadError, setSettingsLoadError] = useState(false);
+  const [backupHistory, setBackupHistory] = useState<SystemBackupHistoryItem[]>([]);
+  const [backupHistoryLoading, setBackupHistoryLoading] = useState(true);
+  const [backupBusy, setBackupBusy] = useState(false);
 
   // Modais de confirmação
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
   const [pendingBackupContent, setPendingBackupContent] = useState<string | null>(null);
+  const [pendingSystemBackup, setPendingSystemBackup] = useState<SystemBackup | null>(null);
+  const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
+  const initialHistoryLoadStarted = useRef(false);
+  const settingsRef = useRef(settings);
+  const savedSettingsRef = useRef(savedSettings);
+  const latestRemoteSnapshotRef = useRef<CloudDataSnapshot | null>(null);
+  const remoteConflictRef = useRef(false);
+  const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const saveErrorToastShownRef = useRef(false);
+  const onRefreshAllDataRef = useRef(onRefreshAllData);
 
-  const handleSaveSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    storageService.saveSettings(settings);
-    success('Configurações salvas!', 'Os parâmetros padrão foram atualizados para seus próximos cálculos.');
-    onRefreshAllData();
+  useEffect(() => {
+    onRefreshAllDataRef.current = onRefreshAllData;
+  }, [onRefreshAllData]);
+
+  const hasLocalSettingsChanges = JSON.stringify(settings) !== JSON.stringify(savedSettings);
+  const hasPendingSettings = hasPendingCloudData(SETTINGS_DATA_KEY);
+  const hasUnsavedSettings = hasLocalSettingsChanges || hasPendingSettings;
+  const syncUnavailable = !isOnline || dataSync.state === 'offline';
+  const settingsStatusMessage = syncUnavailable
+    ? 'Sem conexão. As alterações ficam protegidas neste dispositivo e serão sincronizadas quando a conexão voltar.'
+    : settingsLoadError
+      ? 'Erro ao carregar os parâmetros do Supabase. Os dados locais foram preservados e uma nova tentativa será feita ao reconectar.'
+      : saveState === 'falha'
+        ? 'Erro ao salvar. As alterações permanecem protegidas neste dispositivo; tente salvar novamente.'
+        : saveState === 'salvando'
+          ? 'Salvando as alterações no Supabase...'
+          : hasRemoteConflict
+            ? 'Outra sessão alterou os parâmetros. Suas alterações locais foram mantidas e estão sendo sincronizadas.'
+            : hasUnsavedSettings
+              ? 'Alterações pendentes; salvamento automático em andamento.'
+              : dataSync.state === 'sincronizando'
+                ? 'Sincronizando as alterações com o Supabase...'
+                : dataSync.state === 'local'
+                  ? 'Dados locais disponíveis; aguardando uma sessão conectada ao Supabase.'
+                  : realtimeState === 'indisponivel'
+                    ? 'Salvo automaticamente no Supabase; a atualização em tempo real será retomada ao reconectar.'
+                    : realtimeState === 'conectado'
+                      ? 'Salvo automaticamente e sincronizado com o Supabase.'
+                      : 'Salvo no Supabase; conectando a sincronização em tempo real.';
+  const settingsStatusTone = syncUnavailable || settingsLoadError || saveState === 'falha'
+    ? 'text-rose-600'
+    : saveState === 'salvando' || hasUnsavedSettings || hasRemoteConflict || dataSync.state === 'sincronizando'
+      ? 'text-amber-700'
+      : 'text-emerald-700';
+
+  const applyRemoteSnapshot = useCallback((snapshot: CloudDataSnapshot) => {
+    const previousSnapshot = latestRemoteSnapshotRef.current;
+    if (previousSnapshot && compareSnapshots(snapshot, previousSnapshot) <= 0) return;
+    latestRemoteSnapshotRef.current = snapshot;
+
+    const remoteSettings = normalizeSettings(snapshot.data_value);
+    const localSettings = settingsRef.current;
+    const localHasPendingChanges =
+      JSON.stringify(localSettings) !== JSON.stringify(savedSettingsRef.current) ||
+      hasPendingCloudData(SETTINGS_DATA_KEY);
+
+    if (localHasPendingChanges && JSON.stringify(remoteSettings) !== JSON.stringify(localSettings)) {
+      remoteConflictRef.current = true;
+      setHasRemoteConflict(true);
+      return;
+    }
+
+    applyCloudDataValueLocally(SETTINGS_DATA_KEY, remoteSettings);
+    settingsRef.current = remoteSettings;
+    savedSettingsRef.current = remoteSettings;
+    setSettings(remoteSettings);
+    setSavedSettings(remoteSettings);
+    setSaveState('salvo');
+    setHasRemoteConflict(false);
+    remoteConflictRef.current = false;
+    setSettingsLoadError(false);
+    saveErrorToastShownRef.current = false;
+    onRefreshAllDataRef.current();
+  }, []);
+
+  const persistSettings = useCallback((showConfirmation = false): Promise<boolean> => {
+    const operation = saveQueueRef.current.catch(() => false).then(async () => {
+      const initialSettings = { ...settingsRef.current };
+      if (JSON.stringify(initialSettings) === JSON.stringify(savedSettingsRef.current) &&
+          !hasPendingCloudData(SETTINGS_DATA_KEY) && !settingsLoadError) {
+        setSaveState('salvo');
+        if (showConfirmation) success('Configurações sincronizadas', 'Os parâmetros já estão confirmados no Supabase.');
+        return true;
+      }
+
+      setSaveState('salvando');
+      try {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const settingsToPersist = { ...settingsRef.current };
+          if (remoteConflictRef.current || settingsLoadError) {
+            remoteConflictRef.current = false;
+            setHasRemoteConflict(false);
+            storageService.saveSettings(settingsToPersist);
+          }
+          await saveCacheValueAndWait(SETTINGS_DATA_KEY, JSON.stringify(settingsToPersist));
+          if (!remoteConflictRef.current) break;
+        }
+
+        if (remoteConflictRef.current) {
+          throw new Error('Outra sessão alterou os parâmetros ao mesmo tempo. Suas alterações foram mantidas para uma nova tentativa.');
+        }
+
+        const confirmedSettings = { ...settingsRef.current };
+        savedSettingsRef.current = confirmedSettings;
+        setSavedSettings(confirmedSettings);
+        setSaveState('salvo');
+        setHasRemoteConflict(false);
+        setSettingsLoadError(false);
+        saveErrorToastShownRef.current = false;
+        onRefreshAllDataRef.current();
+        if (showConfirmation) {
+          success('Configurações salvas', 'Os parâmetros foram confirmados no Supabase e estão disponíveis nos outros dispositivos.');
+        }
+        return true;
+      } catch (saveError) {
+        setSaveState('falha');
+        if (!saveErrorToastShownRef.current) {
+          error(
+            'Não foi possível confirmar o salvamento',
+            saveError instanceof Error ? saveError.message : 'As alterações continuam protegidas neste dispositivo; tente novamente.',
+          );
+          saveErrorToastShownRef.current = true;
+        }
+        return false;
+      }
+    });
+
+    saveQueueRef.current = operation.then((saved) => saved, () => false);
+    return operation;
+  }, [error, settingsLoadError, success]);
+
+  const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    const nextSettings = { ...settingsRef.current, [key]: value };
+    settingsRef.current = nextSettings;
+    setSettings(nextSettings);
+    setSaveState('alterado');
+    storageService.saveSettings(nextSettings);
   };
 
-  const handleExportBackup = () => {
-    storageService.downloadBackupFile();
-    success(
-      'Backup gerado com sucesso!',
-      'O arquivo JSON contendo seus produtos reais, fichas técnicas e histórico foi salvo com segurança.'
+  useEffect(() => {
+    if (!hasUnsavedSettings) return;
+    const timer = window.setTimeout(() => {
+      void persistSettings(false);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [hasUnsavedSettings, isOnline, persistSettings, settings]);
+
+  useEffect(() => {
+    let active = true;
+    setRealtimeState('conectando');
+
+    const unsubscribe = subscribeToCloudDataSnapshots(
+      SETTINGS_DATA_KEY,
+      applyRemoteSnapshot,
+      (status) => {
+        if (!active) return;
+        if (status === 'SUBSCRIBED') {
+          setRealtimeState('conectado');
+          void getLatestCloudDataSnapshot(SETTINGS_DATA_KEY)
+            .then((snapshot) => {
+              if (active && snapshot) applyRemoteSnapshot(snapshot);
+            })
+            .catch(() => {
+              if (active) setSettingsLoadError(true);
+            });
+        }
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setRealtimeState('indisponivel');
+        else setRealtimeState('conectando');
+      },
     );
+
+    void getLatestCloudDataSnapshot(SETTINGS_DATA_KEY)
+      .then((snapshot) => {
+        if (!active) return;
+        if (snapshot) applyRemoteSnapshot(snapshot);
+        setSettingsLoadError(false);
+      })
+      .catch(() => {
+        if (active) setSettingsLoadError(true);
+      });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [applyRemoteSnapshot]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      void getLatestCloudDataSnapshot(SETTINGS_DATA_KEY)
+        .then((snapshot) => {
+          if (snapshot) applyRemoteSnapshot(snapshot);
+          setSettingsLoadError(false);
+        })
+        .catch(() => setSettingsLoadError(true));
+    };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [applyRemoteSnapshot]);
+
+  useEffect(() => {
+    onUnsavedChangesChange(hasLocalSettingsChanges && !hasPendingSettings);
+  }, [hasLocalSettingsChanges, hasPendingSettings, onUnsavedChangesChange]);
+
+  useEffect(() => () => onUnsavedChangesChange(false), [onUnsavedChangesChange]);
+
+  const refreshBackupHistory = async () => {
+    setBackupHistoryLoading(true);
+    try {
+      setBackupHistory(await listSystemBackups());
+    } catch (historyError) {
+      error('Não foi possível carregar o histórico de backups', historyError instanceof Error ? historyError.message : 'Tente novamente em instantes.');
+    } finally {
+      setBackupHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (initialHistoryLoadStarted.current) return;
+    initialHistoryLoadStarted.current = true;
+    void refreshBackupHistory();
+  }, []);
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await persistSettings(true);
+  };
+
+  const handleExportBackup = async () => {
+    setBackupBusy(true);
+    try {
+      if (hasUnsavedSettings) {
+        const settingsSaved = await persistSettings(false);
+        if (!settingsSaved) throw new Error('Salve as alterações pendentes antes de criar o backup.');
+      }
+      const backup = await createSystemBackup();
+      downloadSystemBackup(backup);
+      success('Backup gerado e registrado', 'A cópia segura foi salva no histórico e baixada neste dispositivo.');
+      await refreshBackupHistory();
+    } catch (backupError) {
+      error('Não foi possível criar o backup', backupError instanceof Error ? backupError.message : 'Tente novamente quando o Supabase estiver disponível.');
+    } finally {
+      setBackupBusy(false);
+    }
   };
 
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,37 +338,124 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
-      if (content) {
-        setPendingBackupContent(content);
-        setIsRestoreConfirmOpen(true);
-      }
+      if (!content) return;
+      void (async () => {
+        try {
+          const parsed = JSON.parse(content) as unknown;
+          if (parsed && typeof parsed === 'object' && 'version' in parsed && parsed.version === '2.0.0') {
+            setPendingSystemBackup(await validateSystemBackup(parsed));
+            setPendingBackupContent(null);
+          } else if (parsed && typeof parsed === 'object' && 'version' in parsed && parsed.version === '1.0.0' &&
+            'products' in parsed && Array.isArray(parsed.products) &&
+            (!('calculations' in parsed) || Array.isArray(parsed.calculations)) &&
+            (!('settings' in parsed) || (parsed.settings !== null && typeof parsed.settings === 'object' && !Array.isArray(parsed.settings)))) {
+            setPendingBackupContent(content);
+            setPendingSystemBackup(null);
+          } else {
+            throw new Error('A estrutura do arquivo não corresponde a um backup válido.');
+          }
+          setIsRestoreConfirmOpen(true);
+        } catch (validationError) {
+          error('Arquivo de backup não aprovado', validationError instanceof Error ? validationError.message : 'Confira o arquivo e tente novamente.');
+        }
+      })();
     };
     reader.readAsText(file);
     e.target.value = '';
   };
 
-  const confirmRestoreBackup = () => {
-    if (!pendingBackupContent) return;
-
-    const result = storageService.restoreBackup(pendingBackupContent);
-    if (result.success) {
-      success('Backup Restaurado!', result.message);
-      setSettings(storageService.getSettings());
+  const confirmRestoreBackup = async () => {
+    setBackupBusy(true);
+    try {
+      if (pendingSystemBackup) {
+        const message = await restoreSystemBackup(pendingSystemBackup);
+        success('Backup restaurado', message);
+        await refreshBackupHistory();
+      } else if (pendingBackupContent) {
+        await flushPendingCloudData();
+        const result = storageService.restoreBackup(pendingBackupContent);
+        if (!result.success) throw new Error(result.message);
+        await flushPendingCloudData();
+        success('Backup antigo restaurado', result.message);
+      } else {
+        return;
+      }
+      const restoredSettings = storageService.getSettings();
+      settingsRef.current = restoredSettings;
+      savedSettingsRef.current = restoredSettings;
+      setSettings(restoredSettings);
+      setSavedSettings(restoredSettings);
+      setSaveState('salvo');
+      setHasRemoteConflict(false);
+      remoteConflictRef.current = false;
       onRefreshAllData();
-    } else {
-      error('Falha na Restauração', result.message);
+    } catch (restoreError) {
+      error('Falha na restauração', restoreError instanceof Error ? restoreError.message : 'Confira a cópia e tente novamente.');
+    } finally {
+      setPendingBackupContent(null);
+      setPendingSystemBackup(null);
+      setBackupBusy(false);
     }
-    setPendingBackupContent(null);
   };
 
-  const confirmResetData = () => {
-    storageService.resetAllData();
-    setSettings(DEFAULT_SETTINGS);
-    onRefreshAllData();
-    warning(
-      'Configurações Restauradas!',
-      'Os parâmetros padrão do ateliê Kelly Personalizados foram restaurados com sucesso.'
-    );
+  const prepareHistoryRestore = async (backupId: string) => {
+    setBackupBusy(true);
+    try {
+      setPendingSystemBackup(await getSystemBackup(backupId));
+      setPendingBackupContent(null);
+      setIsRestoreConfirmOpen(true);
+    } catch (historyError) {
+      error('Não foi possível abrir esse backup', historyError instanceof Error ? historyError.message : 'Tente novamente em instantes.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const discardUnsavedSettings = async () => {
+    const settingsToRestore = { ...savedSettingsRef.current };
+    await saveQueueRef.current.catch(() => false);
+    settingsRef.current = settingsToRestore;
+    setSettings(settingsToRestore);
+    setSaveState('salvando');
+    try {
+      await saveCacheValueAndWait(SETTINGS_DATA_KEY, JSON.stringify(settingsToRestore));
+      savedSettingsRef.current = settingsToRestore;
+      setSavedSettings(settingsToRestore);
+      setSaveState('salvo');
+      setHasRemoteConflict(false);
+      remoteConflictRef.current = false;
+      setIsDiscardModalOpen(false);
+      onRefreshAllDataRef.current();
+    } catch (discardError) {
+      setSaveState('falha');
+      error('Não foi possível confirmar o descarte', discardError instanceof Error ? discardError.message : 'As alterações foram mantidas para uma nova tentativa.');
+    }
+  };
+
+  const confirmResetData = async () => {
+    const defaultSettings = { ...DEFAULT_SETTINGS };
+    settingsRef.current = defaultSettings;
+    setSettings(defaultSettings);
+    setSaveState('salvando');
+    const resetSaved = await persistSettings(false);
+    if (!resetSaved) return;
+    setHasRemoteConflict(false);
+    remoteConflictRef.current = false;
+    warning('Parâmetros restaurados', 'Os valores padrão foram salvos. Produtos, pedidos e históricos foram preservados.');
+  };
+
+  const handleLogout = async () => {
+    if (hasUnsavedSettings) {
+      const settingsSaved = await persistSettings(false);
+      if (!settingsSaved) return;
+    }
+    try {
+      const { error: logoutError } = await supabase.auth.signOut();
+      if (logoutError) throw logoutError;
+      success('Sessão encerrada', 'Você saiu da sua conta.');
+    } catch {
+      error('Não foi possível sair', 'Tente novamente em instantes.');
+    }
   };
 
   return (
@@ -113,7 +481,13 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
               Segurança & Central de Backup de Dados
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
-              Este aplicativo salva todas as suas informações com total privacidade no <strong>armazenamento local (LocalStorage)</strong> do seu próprio navegador. Não há risco de vazamento na internet. Para não perder seus preços ou poder usar no celular e computador, gere arquivos de backup periodicamente!
+              Os dados dos administradores são sincronizados no Supabase e usam o cache local para acesso rápido e retomada das alterações quando a conexão voltar.
+            </p>
+            <p role="status" className="text-xs text-slate-600 leading-relaxed max-w-2xl pt-2">
+              <strong>Estado da sincronização:</strong> {dataSync.message}
+              {dataSync.lastSyncedAt && (
+                <span> Última sincronização: {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(dataSync.lastSyncedAt))}.</span>
+              )}
             </p>
           </div>
         </div>
@@ -126,15 +500,16 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
               <span>Exportar Arquivo de Backup</span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Baixa um arquivo <strong>.JSON</strong> seguro com todos os seus produtos reais, histórico de cálculos e parâmetros do ateliê.
+              Gera uma cópia no Supabase e baixa um arquivo <strong>.JSON</strong> com dados do ateliê, pedidos e lista segura de usuários.
             </p>
             <button
               type="button"
               onClick={handleExportBackup}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-md shadow-brand-500/20 active:scale-95 transition-all"
+              disabled={backupBusy}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-md shadow-brand-500/20 active:scale-95 transition-all disabled:cursor-wait disabled:opacity-60"
             >
-              <DownloadCloud className="w-4 h-4" />
-              <span>Fazer backup agora</span>
+              <DownloadCloud className={`w-4 h-4 ${backupBusy ? 'animate-pulse' : ''}`} />
+              <span>{backupBusy ? 'Preparando backup...' : 'Fazer backup agora'}</span>
             </button>
           </div>
 
@@ -145,7 +520,7 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
               <span>Importar / Restaurar Backup</span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Carregue um arquivo <strong>.JSON</strong> que você exportou para restaurar suas fichas técnicas ou sincronizar em outro dispositivo.
+              Importe uma cópia validada. Os pedidos existentes são preservados e duplicados não substituem registros atuais.
             </p>
             <input
               type="file"
@@ -164,11 +539,20 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             </button>
           </div>
         </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><h4 className="text-sm font-extrabold text-slate-900">Histórico de backups</h4><p className="mt-0.5 text-xs text-slate-500">Cópias verificadas e armazenadas no Supabase.</p></div>
+            <button type="button" onClick={() => void refreshBackupHistory()} disabled={backupHistoryLoading || backupBusy} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${backupHistoryLoading ? 'animate-spin' : ''}`} /> Atualizar histórico</button>
+          </div>
+          {backupHistoryLoading ? <p className="py-5 text-center text-xs text-slate-500">Carregando histórico...</p>
+            : backupHistory.length === 0 ? <p className="py-5 text-center text-xs text-slate-500">Ainda não há cópias salvas no histórico.</p>
+              : <div className="divide-y divide-slate-100">{backupHistory.map((backup) => <div key={backup.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"><span><strong className="block text-xs text-slate-800">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(backup.createdAt))}</strong><small className="text-[10px] text-slate-400">Integridade SHA-256: {backup.checksum.slice(0, 16)}…</small></span><button type="button" disabled={backupBusy} onClick={() => void prepareHistoryRestore(backup.id)} className="inline-flex min-h-9 items-center justify-center gap-2 self-start rounded-lg border border-brand-200 px-3 text-xs font-bold text-brand-700 transition hover:bg-brand-50 disabled:opacity-50 sm:self-auto"><UploadCloud className="h-3.5 w-3.5" /> Restaurar cópia</button></div>)}</div>}
+        </div>
       </div>
 
       {/* Seção 2: Parâmetros Padrão do Ateliê com Dados Reais de Mercado */}
       <form onSubmit={handleSaveSettings} className="card-base p-6 sm:p-8 space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
               <Store className="w-5 h-5 text-brand-600" />
@@ -179,14 +563,19 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             </p>
           </div>
 
-          <button
-            type="submit"
-            className="flex items-center gap-1.5 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-md shadow-brand-500/20 active:scale-95 transition-all"
-          >
-            <Save className="w-4 h-4" />
-            <span>Salvar Parâmetros</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {hasUnsavedSettings && <button type="button" onClick={() => setIsDiscardModalOpen(true)} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50">Descartar alterações</button>}
+            <button type="submit" disabled={!hasUnsavedSettings} className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-brand-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-brand-500/20 transition-all hover:bg-brand-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">
+              <Save className={`h-4 w-4 ${saveState === 'salvando' ? 'animate-pulse' : ''}`} />
+              <span>{saveState === 'salvando' ? 'Salvando...' : saveState === 'salvo' ? 'Parâmetros salvos' : 'Salvar Parâmetros'}</span>
+            </button>
+          </div>
         </div>
+
+        <p role="status" aria-live="polite" className={`flex items-center gap-2 text-xs font-semibold ${settingsStatusTone}`}>
+          <span aria-hidden="true" className={`h-2 w-2 flex-shrink-0 rounded-full ${syncUnavailable || settingsLoadError || saveState === 'falha' ? 'bg-rose-500' : saveState === 'salvando' || hasUnsavedSettings || hasRemoteConflict || dataSync.state === 'sincronizando' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+          <span>{settingsStatusMessage}</span>
+        </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
@@ -196,7 +585,7 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             <input
               type="text"
               value={settings.shopName}
-              onChange={(e) => setSettings({ ...settings, shopName: e.target.value })}
+              onChange={(e) => updateSetting('shopName', e.target.value)}
               className="input-base"
               placeholder="Ex: Ateliê Personalizados com Amor"
             />
@@ -209,7 +598,7 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             <input
               type="text"
               value={settings.ownerName}
-              onChange={(e) => setSettings({ ...settings, ownerName: e.target.value })}
+              onChange={(e) => updateSetting('ownerName', e.target.value)}
               className="input-base"
               placeholder="Ex: Kelly Cristina"
             />
@@ -221,7 +610,7 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             </label>
             <CurrencyInput
               value={settings.defaultHourlyRate}
-              onChange={(value) => setSettings({ ...settings, defaultHourlyRate: value })}
+              onChange={(value) => updateSetting('defaultHourlyRate', value)}
               className="input-base font-semibold"
             />
             <span className="text-[11px] text-slate-400 mt-1 block">
@@ -235,7 +624,7 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             </label>
             <CurrencyInput
               value={settings.defaultInkCostPerSheet}
-              onChange={(value) => setSettings({ ...settings, defaultInkCostPerSheet: value })}
+              onChange={(value) => updateSetting('defaultInkCostPerSheet', value)}
               className="input-base font-semibold"
             />
             <span className="text-[11px] text-slate-400 mt-1 block">
@@ -249,7 +638,7 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             </label>
             <PercentInput
               value={settings.defaultMarginPercentage}
-              onChange={(value) => setSettings({ ...settings, defaultMarginPercentage: value || 0 })}
+              onChange={(value) => updateSetting('defaultMarginPercentage', value || 0)}
               max={90}
               className="input-base pr-10 font-semibold"
             />
@@ -264,7 +653,7 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
             </label>
             <PercentInput
               value={settings.defaultWastePercentage}
-              onChange={(value) => setSettings({ ...settings, defaultWastePercentage: value || 0 })}
+              onChange={(value) => updateSetting('defaultWastePercentage', value || 0)}
               max={40}
               className="input-base pr-10 font-semibold"
             />
@@ -296,19 +685,53 @@ export function SettingsPage({ onRefreshAllData }: SettingsPageProps) {
         </button>
       </div>
 
+      {/* Seção 4: Autenticação */}
+      <div className="card-base p-6 border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+            <Info className="w-4 h-4 text-slate-500" />
+            <span>Sua Conta</span>
+          </h4>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Gerencie sua sessão de login com o Supabase.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="px-4 py-2 rounded-xl border border-red-300 text-red-700 hover:bg-white text-xs font-semibold transition-colors self-start sm:self-auto"
+        >
+          Sair da Conta
+        </button>
+      </div>
+
       {/* Modal de Confirmação para Importar Backup */}
       <CustomModal
         isOpen={isRestoreConfirmOpen}
         onClose={() => {
           setIsRestoreConfirmOpen(false);
           setPendingBackupContent(null);
+          setPendingSystemBackup(null);
         }}
         title="Restaurar Backup do Arquivo?"
-        description="Atenção: Ao restaurar este backup, os produtos e cálculos contidos no arquivo JSON substituirão os dados atuais do navegador. Deseja prosseguir?"
+        description={pendingSystemBackup
+          ? 'A cópia será gravada como uma nova versão dos dados. Pedidos e históricos existentes serão preservados; usuários da cópia são apenas informativos e não recriam contas.'
+          : 'Este arquivo antigo será validado estruturalmente e restaurará os dados que contém. Deseja prosseguir?'}
         confirmText="Sim, Restaurar Backup"
         cancelText="Cancelar"
         variant="warning"
-        onConfirm={confirmRestoreBackup}
+        onConfirm={() => { void confirmRestoreBackup(); }}
+      />
+
+      <CustomModal
+        isOpen={isDiscardModalOpen}
+        onClose={() => setIsDiscardModalOpen(false)}
+        title="Descartar alterações não salvas?"
+        description="Os parâmetros voltarão ao último estado confirmado no Supabase."
+        confirmText="Descartar alterações"
+        cancelText="Continuar editando"
+        variant="warning"
+        onConfirm={discardUnsavedSettings}
       />
 
       {/* Modal de Confirmação para Resetar aos Padrões */}

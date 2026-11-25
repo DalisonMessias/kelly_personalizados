@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supabase:login": "supabase login",
+    "supabase:deploy-functions": "supabase functions deploy system-backup --project-ref zssyrupllztulugvibzh && supabase functions deploy manage-admin-users --project-ref zssyrupllztulugvibzh"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.2",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "jspdf": "^4.2.1",
@@ -26,6 +29,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.2",
+    "supabase": "^3.4.0",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.7.2",
     "vite": "^6.1.0"

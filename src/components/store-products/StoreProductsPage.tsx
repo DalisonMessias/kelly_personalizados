@@ -32,6 +32,7 @@ import { PercentInput } from '../ui/PercentInput';
 import { CustomModal } from '../ui/CustomModal';
 import { CustomSelect } from '../ui/CustomSelect';
 import { CustomSwitch } from '../ui/CustomSwitch';
+import { getStoreProductImageUrl, uploadStoreProductImages } from '../../services/storefrontService';
 import { useToast } from '../ui/Toast';
 
 interface StoreProductsPageProps {
@@ -75,13 +76,14 @@ const blankStoreProduct = (): StoreProduct => ({
 });
 
 export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps) {
-  const { success, warning } = useToast();
+  const { success, warning, error } = useToast();
   const [products, setProducts] = useState<StoreProduct[]>(() => storeRepository.getProducts());
   const [categories, setCategories] = useState<StoreCategory[]>(() => storeRepository.getCategories());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todos' | StoreProductStatus>('todos');
   const [categoryFilter, setCategoryFilter] = useState<string>('todos');
   const [editorOpen, setEditorOpen] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [form, setForm] = useState<StoreProduct>(blankStoreProduct());
   const [deleteTarget, setDeleteTarget] = useState<StoreProduct | null>(null);
   const [categoryEditorOpen, setCategoryEditorOpen] = useState(false);
@@ -102,7 +104,29 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
     setEditorOpen(true);
   };
 
+  const handleUploadImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (files.length === 0) return;
+    if (!form.id || !products.some((product) => product.id === form.id)) {
+      warning('Salve o produto primeiro', 'Depois, abra novamente o cadastro para adicionar as fotos.');
+      return;
+    }
+
+    setUploadingImages(true);
+    try {
+      const imageIds = await uploadStoreProductImages(form.id, files);
+      setForm((current) => ({ ...current, imageIds: [...current.imageIds, ...imageIds] }));
+      success('Fotos enviadas', 'Salve o produto para publicar as imagens na loja.');
+    } catch (cause) {
+      error('Não foi possível enviar as fotos', cause instanceof Error ? cause.message : 'Confira os arquivos e tente novamente.');
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
   const saveProduct = () => {
+    if (uploadingImages) { warning('Aguarde o envio', 'As fotos ainda estão sendo enviadas.'); return; }
     if (!form.name.trim()) {
       warning('Informe o nome', 'O nome do produto é obrigatório.');
       return;
@@ -122,7 +146,7 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
     const updated = storeRepository.saveProduct(normalized);
     setProducts(updated);
     setEditorOpen(false);
-    success(form.id ? 'Produto atualizado!' : 'Produto criado!', `${normalized.name} foi salvo no catálogo futuro.`);
+    success(form.id ? 'Produto atualizado!' : 'Produto criado!', `${normalized.name} foi salvo no catálogo da loja virtual.`);
   };
 
   const duplicateProduct = (product: StoreProduct) => {
@@ -354,6 +378,17 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
               <h3 className="text-xs font-black uppercase tracking-wider text-brand-700">Dados comerciais</h3>
               <div><label className="text-xs font-bold text-slate-700">Nome do produto</label><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="input-base mt-1" /></div>
               <div><label className="text-xs font-bold text-slate-700">Descrição pública</label><textarea value={form.publicDescription} onChange={(event) => setForm({ ...form, publicDescription: event.target.value })} className="input-base mt-1" rows={3} /></div>
+              <section className="rounded-2xl border border-rose-100 bg-rose-50/50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div><h4 className="text-xs font-black uppercase tracking-wide text-slate-700">Galeria de imagens</h4><p className="mt-1 text-xs text-slate-500">Fotos públicas do produto · PNG, JPG ou WEBP · até 8 MB cada.</p></div>
+                  <label className={uploadingImages ? 'inline-flex min-h-10 pointer-events-none items-center justify-center gap-2 rounded-xl border border-pink-200 bg-white px-3 text-xs font-bold text-pink-700 opacity-60' : 'inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-pink-200 bg-white px-3 text-xs font-bold text-pink-700 transition hover:bg-pink-50'}>
+                    <Image className="h-4 w-4" />{uploadingImages ? 'Enviando...' : 'Adicionar fotos'}
+                    <input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={uploadingImages} onChange={handleUploadImages} className="sr-only" />
+                  </label>
+                </div>
+                {!products.some((product) => product.id === form.id) && <p className="mt-3 rounded-lg bg-white px-3 py-2 text-xs text-amber-700">Salve o produto e abra novamente o cadastro para liberar o envio de fotos.</p>}
+                {form.imageIds.length > 0 && <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{form.imageIds.map((imageId) => { const imageUrl = getStoreProductImageUrl(form.id, imageId); return <div key={imageId} className="relative aspect-square overflow-hidden rounded-xl border border-rose-100 bg-white">{imageUrl && <img src={imageUrl} alt="Foto do produto" className="h-full w-full object-cover" />}<button type="button" onClick={() => setForm((current) => ({ ...current, imageIds: current.imageIds.filter((id) => id !== imageId) }))} className="absolute inset-x-1 bottom-1 rounded-lg bg-white/95 px-2 py-1.5 text-[10px] font-bold text-rose-700 shadow" title="Remover da galeria">Remover da galeria</button></div>; })}</div>}
+              </section>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="text-xs font-bold text-slate-700">Categoria</label><select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as ProductCategory })} className="input-base mt-1"><option value="outro">Outro</option>{Object.entries(categoryLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                 <div><label className="text-xs font-bold text-slate-700">Quantidade mínima</label><input type="number" min={1} value={form.minimumQuantity} onChange={(event) => setForm({ ...form, minimumQuantity: Math.max(1, Number(event.target.value)) })} className="input-base mt-1" /></div>
@@ -408,7 +443,7 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
 
             <section className="pt-4 border-t border-pink-100 space-y-3">
               <CustomSwitch label="Ativo no sistema" checked={form.status === 'ativo'} onChange={(checked) => setForm({ ...form, status: checked ? 'ativo' : 'inativo' })} />
-              <CustomSwitch label="Permitir exibição futura na loja" checked={form.showInFutureStore} onChange={(checked) => setForm({ ...form, showInFutureStore: checked })} />
+              <CustomSwitch label="Exibir na loja virtual" checked={form.showInFutureStore} onChange={(checked) => setForm({ ...form, showInFutureStore: checked })} />
             </section>
           </div>
         </CustomModal>

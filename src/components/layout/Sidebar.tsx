@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   Calculator, 
@@ -11,25 +11,51 @@ import {
   BrainCircuit,
   Users,
   ShoppingBag,
-  WandSparkles
+  ClipboardList,
+  ExternalLink,
+  WandSparkles,
+  LogOut,
+  UserCog
 } from 'lucide-react';
-import { storageService } from '../../services/storage';
+import { supabase } from '../../services/supabase';
+import { createSystemBackup, downloadSystemBackup } from '../../services/systemBackupService';
 import { useToast } from '../ui/Toast';
 
-export type NavTab = 'dashboard' | 'calculator' | 'catalog' | 'history' | 'assistant' | 'art-prompt' | 'clients' | 'store-products' | 'settings';
+export type NavTab = 'dashboard' | 'calculator' | 'catalog' | 'history' | 'assistant' | 'art-prompt' | 'clients' | 'store-products' | 'store-orders' | 'settings' | 'users';
 
 interface SidebarProps {
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
   shopName: string;
+  onLogoutAttempt: () => boolean;
 }
 
-export function Sidebar({ currentTab, onSelectTab, shopName }: SidebarProps) {
-  const { success } = useToast();
+export function Sidebar({ currentTab, onSelectTab, shopName, onLogoutAttempt }: SidebarProps) {
+  const { success, error } = useToast();
+  const [backupBusy, setBackupBusy] = useState(false);
 
-  const handleQuickBackup = () => {
-    storageService.downloadBackupFile();
-    success('Backup realizado!', 'Seus dados foram salvos com segurança no seu computador.');
+  const handleQuickBackup = async () => {
+    setBackupBusy(true);
+    try {
+      const backup = await createSystemBackup();
+      downloadSystemBackup(backup);
+      success('Backup realizado', 'A cópia completa foi registrada no Supabase e baixada neste dispositivo.');
+    } catch (backupError) {
+      error('Não foi possível criar o backup', backupError instanceof Error ? backupError.message : 'Tente novamente em instantes.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (onLogoutAttempt()) return;
+    try {
+      const { error: logoutError } = await supabase.auth.signOut();
+      if (logoutError) throw logoutError;
+      success('Sessão encerrada', 'Você saiu da sua conta.');
+    } catch {
+      error('Não foi possível sair', 'Tente novamente em instantes.');
+    }
   };
 
   const menuItems: { id: NavTab; label: string; icon: React.ReactNode }[] = [
@@ -37,10 +63,12 @@ export function Sidebar({ currentTab, onSelectTab, shopName }: SidebarProps) {
     { id: 'calculator', label: 'Calculadora de Custos', icon: <Calculator className="w-5 h-5" /> },
     { id: 'catalog', label: 'Catálogo de Serviços', icon: <FolderKanban className="w-5 h-5" /> },
     { id: 'store-products', label: 'Catálogo de Produtos', icon: <ShoppingBag className="w-5 h-5" /> },
+    { id: 'store-orders', label: 'Pedidos da Loja', icon: <ClipboardList className="w-5 h-5" /> },
     { id: 'history', label: 'Histórico de Cálculos', icon: <History className="w-5 h-5" /> },
     { id: 'assistant', label: 'Assistente IA', icon: <BrainCircuit className="w-5 h-5" /> },
     { id: 'art-prompt', label: 'Assistente de Artes', icon: <WandSparkles className="w-5 h-5" /> },
     { id: 'clients', label: 'Clientes', icon: <Users className="w-5 h-5" /> },
+    { id: 'users', label: 'Gerenciamento de Usuários', icon: <UserCog className="w-5 h-5" /> },
     { id: 'settings', label: 'Configurações e Parâmetros', icon: <Settings className="w-5 h-5" /> },
   ];
 
@@ -89,23 +117,38 @@ export function Sidebar({ currentTab, onSelectTab, shopName }: SidebarProps) {
             </button>
           );
         })}
+        <a href="/" target="_blank" rel="noreferrer" className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm font-bold text-rose-700 transition hover:bg-rose-100">
+          <ExternalLink className="h-4 w-4" />
+          <span>Ver loja virtual</span>
+        </a>
       </nav>
 
       {/* Botão de Destaque Obrigatório: "Fazer backup" */}
       <div className="p-4 border-t border-slate-100 bg-slate-50/70">
         <button
           type="button"
-          onClick={handleQuickBackup}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-brand-600 to-pink-500 hover:from-brand-700 hover:to-pink-600 text-white font-semibold text-sm rounded-xl shadow-md shadow-brand-500/20 active:scale-95 transition-all"
+          onClick={() => { void handleQuickBackup(); }}
+          disabled={backupBusy}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-brand-600 to-pink-500 hover:from-brand-700 hover:to-pink-600 text-white font-semibold text-sm rounded-xl shadow-md shadow-brand-500/20 active:scale-95 transition-all disabled:cursor-wait disabled:opacity-60"
         >
-          <DownloadCloud className="w-4 h-4" />
-          <span>Fazer backup</span>
+          <DownloadCloud className={`w-4 h-4 ${backupBusy ? 'animate-pulse' : ''}`} />
+          <span>{backupBusy ? 'Preparando backup...' : 'Fazer backup'}</span>
         </button>
 
         <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 justify-center">
           <HeartHandshake className="w-3.5 h-3.5 text-brand-500 flex-shrink-0" />
-          <span>Armazenamento local seguro</span>
+          <span>Cache local e Supabase</span>
         </div>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          aria-label="Sair da conta"
+          className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold text-xs rounded-xl transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Sair da conta</span>
+        </button>
       </div>
     </aside>
   );

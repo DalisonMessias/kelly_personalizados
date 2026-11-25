@@ -12,25 +12,51 @@ import {
   BrainCircuit,
   Users,
   ShoppingBag,
-  WandSparkles
+  ClipboardList,
+  ExternalLink,
+  WandSparkles,
+  LogOut,
+  UserCog
 } from 'lucide-react';
 import { NavTab } from './Sidebar';
-import { storageService } from '../../services/storage';
+import { supabase } from '../../services/supabase';
+import { createSystemBackup, downloadSystemBackup } from '../../services/systemBackupService';
 import { useToast } from '../ui/Toast';
 
 interface MobileNavProps {
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
   shopName: string;
+  onLogoutAttempt: () => boolean;
 }
 
-export function MobileNav({ currentTab, onSelectTab, shopName }: MobileNavProps) {
+export function MobileNav({ currentTab, onSelectTab, shopName, onLogoutAttempt }: MobileNavProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const { success } = useToast();
+  const [backupBusy, setBackupBusy] = useState(false);
+  const { success, error } = useToast();
 
-  const handleQuickBackup = () => {
-    storageService.downloadBackupFile();
-    success('Backup realizado!', 'Seus dados foram baixados no formato JSON.');
+  const handleQuickBackup = async () => {
+    setBackupBusy(true);
+    try {
+      const backup = await createSystemBackup();
+      downloadSystemBackup(backup);
+      success('Backup realizado', 'A cópia completa foi registrada no Supabase e baixada neste dispositivo.');
+    } catch (backupError) {
+      error('Não foi possível criar o backup', backupError instanceof Error ? backupError.message : 'Tente novamente em instantes.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (onLogoutAttempt()) return;
+    try {
+      const { error: logoutError } = await supabase.auth.signOut();
+      if (logoutError) throw logoutError;
+      success('Sessão encerrada', 'Você saiu da sua conta.');
+    } catch {
+      error('Não foi possível sair', 'Tente novamente em instantes.');
+    }
   };
 
   const navItems: { id: NavTab; label: string; icon: React.ReactNode }[] = [
@@ -61,12 +87,13 @@ export function MobileNav({ currentTab, onSelectTab, shopName }: MobileNavProps)
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={handleQuickBackup}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 text-brand-700 hover:bg-brand-100 text-xs font-semibold rounded-lg transition-colors"
+            onClick={() => { void handleQuickBackup(); }}
+            disabled={backupBusy}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 text-brand-700 hover:bg-brand-100 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
             title="Fazer backup"
           >
             <DownloadCloud className="w-3.5 h-3.5" />
-            <span>Backup</span>
+            <span>{backupBusy ? 'Salvando...' : 'Backup'}</span>
           </button>
 
           <button
@@ -114,10 +141,12 @@ export function MobileNav({ currentTab, onSelectTab, shopName }: MobileNavProps)
                 { id: 'calculator' as NavTab, label: 'Calculadora de Custos', icon: <Calculator className="w-5 h-5" /> },
                 { id: 'catalog' as NavTab, label: 'Catálogo de Serviços', icon: <FolderKanban className="w-5 h-5" /> },
                 { id: 'store-products' as NavTab, label: 'Catálogo de Produtos', icon: <ShoppingBag className="w-5 h-5" /> },
+                { id: 'store-orders' as NavTab, label: 'Pedidos da Loja', icon: <ClipboardList className="w-5 h-5" /> },
                 { id: 'history' as NavTab, label: 'Histórico de Cálculos', icon: <History className="w-5 h-5" /> },
                 { id: 'assistant' as NavTab, label: 'Assistente IA', icon: <BrainCircuit className="w-5 h-5" /> },
                 { id: 'art-prompt' as NavTab, label: 'Assistente de Artes', icon: <WandSparkles className="w-5 h-5" /> },
                 { id: 'clients' as NavTab, label: 'Clientes', icon: <Users className="w-5 h-5" /> },
+                { id: 'users' as NavTab, label: 'Gerenciamento de Usuários', icon: <UserCog className="w-5 h-5" /> },
                 { id: 'settings' as NavTab, label: 'Configurações e Parâmetros', icon: <Settings className="w-5 h-5" /> },
               ].map((item) => {
                 const isActive = currentTab === item.id;
@@ -142,19 +171,33 @@ export function MobileNav({ currentTab, onSelectTab, shopName }: MobileNavProps)
                   </button>
                 );
               })}
+              <a href="/" target="_blank" rel="noreferrer" onClick={() => setIsDrawerOpen(false)} className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm font-bold text-rose-700">
+                <ExternalLink className="h-4 w-4" />
+                <span>Ver loja virtual</span>
+              </a>
             </nav>
 
             <div className="p-4 border-t border-slate-100 bg-slate-50">
               <button
                 type="button"
                 onClick={() => {
-                  handleQuickBackup();
+                  void handleQuickBackup();
                   setIsDrawerOpen(false);
                 }}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-600 text-white font-semibold text-xs rounded-xl shadow-md"
               >
                 <DownloadCloud className="w-4 h-4" />
                 <span>Fazer backup agora</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                aria-label="Sair da conta"
+                title="Sair da conta"
+                className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold text-xs rounded-xl transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sair da conta</span>
               </button>
             </div>
           </div>

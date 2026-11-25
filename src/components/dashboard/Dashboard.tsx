@@ -10,7 +10,9 @@ import {
   Calendar, 
   Layers, 
   Sparkles,
-  PackageOpen
+  PackageOpen,
+  ClipboardList,
+  UserCog
 } from 'lucide-react';
 import { CalculationRecord, ProductService } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/calculations';
@@ -68,7 +70,23 @@ export function Dashboard({ products, calculations, onNavigate, onEditProduct }:
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={() => onNavigate('users')}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-pink-200 bg-white px-5 py-3 text-sm font-bold text-brand-700 shadow-sm transition-all hover:bg-pink-50 active:scale-95"
+          >
+            <UserCog className="h-4 w-4" />
+            <span>Gerenciar usuários</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate('store-orders')}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-pink-600 px-5 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-pink-700 active:scale-95"
+          >
+            <ClipboardList className="h-4 w-4" />
+            <span>Ver pedidos da loja</span>
+          </button>
           <button
             type="button"
             onClick={() => onNavigate('calculator')}
