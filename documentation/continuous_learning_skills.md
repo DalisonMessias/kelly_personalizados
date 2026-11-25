@@ -92,3 +92,11 @@ Este documento centraliza e documenta todas as soluções técnicas, correções
 - **Causa identificada:** As funções manage-admin-users e system-backup retornaram HTTP 404 no projeto conectado por ainda não estarem publicadas. O cliente também repassava diretamente a mensagem da biblioteca Supabase e as telas não protegiam a inicialização contra repetição de efeitos.
 - **Solução aplicada:** Foi centralizado o tratamento das respostas, com instruções em português para função ausente, falha de comunicação ou encaminhamento. O carregamento inicial das duas telas passou a executar uma vez por montagem.
 - **Prevenção:** Antes de investigar credenciais ou dados, confirmar a publicação da função no projeto Supabase selecionado; em telas React com efeitos de carregamento, impedir chamadas e notificações duplicadas durante verificações de desenvolvimento.
+
+
+### Registro 12: Ação de arquivamento ausente na função de backups publicada
+
+- **Contexto:** Ao retirar uma cópia do histórico, o sistema retornou “Ação de backup desconhecida”.
+- **Causa identificada:** A interface e o código local enviam a ação de arquivamento, mas a versão publicada de `system-backup` ainda não contém essa rota.
+- **Solução aplicada:** O tratamento de respostas agora identifica essa mensagem e explica que a função está desatualizada, orientando a publicação da versão atualizada e informando que os dados dos backups continuam preservados.
+- **Prevenção:** Depois de adicionar uma ação à função hospedada, publicar `system-backup` antes de validar o fluxo pela interface.

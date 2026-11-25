@@ -1211,3 +1211,30 @@ alter table public.kelly_admin_backup_history_v1
 create index if not exists kelly_admin_backup_history_visible_created_idx
   on public.kelly_admin_backup_history_v1 (created_at desc)
   where archived_at is null;
+
+-- Guarda a configuração Gemini do criador de produtos sem expor a chave ao navegador.
+create table if not exists public.api_keys (
+  id uuid primary key default gen_random_uuid(),
+  key_name text not null,
+  provider text not null,
+  api_key text not null,
+  model_name text not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.api_keys
+  add column if not exists key_name text,
+  add column if not exists provider text,
+  add column if not exists api_key text,
+  add column if not exists model_name text,
+  add column if not exists is_active boolean default true,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
+create index if not exists api_keys_product_creator_lookup_idx
+  on public.api_keys (key_name, is_active, updated_at desc);
+
+alter table public.api_keys enable row level security;
+grant all on table public.api_keys to service_role;

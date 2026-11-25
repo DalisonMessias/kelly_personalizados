@@ -285,7 +285,7 @@ export interface CustomerQuote {
   updatedAt: string;
 }
 
-export type StoreProductStatus = 'ativo' | 'inativo';
+export type StoreProductStatus = 'ativo' | 'inativo' | 'rascunho';
 export type PersonalizationFieldType = 'texto' | 'numero' | 'selecao' | 'multipla_escolha' | 'sim_nao';
 
 export interface PersonalizationOption {
@@ -311,7 +311,17 @@ export interface StoreProduct {
   name: string;
   publicDescription: string;
   internalDescription: string;
-  category: ProductCategory;
+  category: string;
+  productType?: string;
+  materials?: string[];
+  technicalSpecs?: string;
+  dimensions?: string;
+  personalizationInstructions?: string;
+  saleUnit?: string;
+  keywords?: string[];
+  additionalInfo?: string;
+  creationOrigin?: 'manual' | 'ia';
+  pricingProvided?: boolean;
   imageIds: string[];
   linkedServiceId?: string;
   linkedCalculationId?: string;
@@ -332,6 +342,28 @@ export interface StoreProduct {
   addons: StoreProductAddon[];
   createdAt: string;
   updatedAt: string;
+}
+
+export type AiProductModel = 'gemini-3.1-pro' | 'gemini-3.0-flash' | 'gemini-2.5-pro' | 'gemini-2.5-flash';
+
+export interface AiProductDraft {
+  name: string;
+  description: string;
+  category: string;
+  productType: string;
+  materials: string[];
+  technicalSpecs: string;
+  dimensions: string;
+  personalizationOptions: string[];
+  saleUnit: string;
+  keywords: string[];
+  additionalInfo: string;
+  salePrice: number | null;
+  productionCost: number | null;
+  materialCost: number | null;
+  laborCost: number | null;
+  otherCosts: number | null;
+  marginPercent: number | null;
 }
 
 export interface StoreCategory {

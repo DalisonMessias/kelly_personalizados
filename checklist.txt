@@ -114,3 +114,10 @@
 - [x] Implementação de listagem, leitura e arquivamento lógico de backups na função protegida, sem apagar conteúdo do banco (supabase/functions/system-backup/index.ts)
 - [x] Inclusão da ação de arquivar no serviço e dos botões Baixar e Excluir ao lado de Restaurar, com validação de integridade e confirmação personalizada (src/services/systemBackupService.ts e src/components/settings/SettingsPage.tsx)
 - [x] Atualização do plano da solicitação e registro das etapas concluídas; publicação da função e aplicação do esquema no Supabase seguem necessárias para ativar o recurso no ambiente online (documentation/TASK_LIST.md)
+
+- [x] Identificação de que a mensagem “Ação de backup desconhecida” vem da versão remota desatualizada da função system-backup, que ainda não reconhece o arquivamento (supabase/functions/system-backup/index.ts)
+- [x] Tradução específica da resposta de ação desconhecida, com orientação para publicar a função atualizada e confirmação de que os backups permanecem preservados (src/services/supabaseFunctionErrors.ts)
+- [x] Registro incremental da causa, solução e prevenção para a publicação de novas ações hospedadas (documentation/continuous_learning_skills.md)
+
+- [x] Confirmação visual de que a interface agora identifica a versão desatualizada de system-backup e preserva os backups (src/services/supabaseFunctionErrors.ts)
+- [x] Verificação do comando de publicação já configurado e da indisponibilidade de painel de navegador nesta sessão; publicação e aplicação do esquema permanecem pendentes (package.json e documentation/TASK_LIST.md)

@@ -29,6 +29,10 @@ export async function getSupabaseFunctionErrorMessage(error: unknown, functionNa
     return `A função “${functionName}” não está publicada neste projeto Supabase. Publique-a e tente novamente.`;
   }
 
+  if (functionName === 'system-backup' && /ação de backup desconhecida/i.test(body?.error ?? body?.message ?? '')) {
+    return 'A função “system-backup” publicada está desatualizada e ainda não reconhece esta ação. Publique a versão atualizada da função no Supabase e tente novamente. Os dados dos backups continuam preservados.';
+  }
+
   if (failure.name === 'FunctionsFetchError' || /failed to send a request to the edge function/i.test(failure.message ?? '')) {
     return `Não foi possível alcançar a função “${functionName}”. Verifique a conexão e se ela está publicada no Supabase.`;
   }
