@@ -1229,9 +1229,9 @@ alter table public.api_keys
   add column if not exists provider text,
   add column if not exists api_key text,
   add column if not exists model_name text,
-  add column if not exists is_active boolean default true,
-  add column if not exists created_at timestamptz default now(),
-  add column if not exists updated_at timestamptz default now();
+  add column if not exists is_active boolean,
+  add column if not exists created_at timestamptz,
+  add column if not exists updated_at timestamptz;
 
 create index if not exists api_keys_product_creator_lookup_idx
   on public.api_keys (key_name, is_active, updated_at desc);

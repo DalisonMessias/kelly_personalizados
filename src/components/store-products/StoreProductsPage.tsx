@@ -211,10 +211,13 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
     }
 
     const now = new Date().toISOString();
+    const calculatorCategory = Object.prototype.hasOwnProperty.call(categoryLabels, storeProduct.category)
+      ? storeProduct.category as ProductCategory
+      : 'outro';
     onSendToCalculator({
       id: `store-link-${storeProduct.id}`,
       name: storeProduct.name,
-      category: storeProduct.category,
+      category: calculatorCategory,
       description: storeProduct.publicDescription,
       sheetCount: storeProduct.minimumQuantity,
       createdAt: now,
@@ -414,8 +417,8 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
                 {form.creationOrigin === 'ia' && !form.pricingProvided && <p className="text-[11px] text-slate-500">A IA não informou custos ou preços suficientes. Os valores zerados ainda não estão cadastrados.</p>}
               </section>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs font-bold text-slate-700">Preço de venda</label><CurrencyInput value={form.salePrice} onChange={(value) => setForm({ ...form, salePrice: value, salePriceProvided: value > 0 ? true : form.salePriceProvided })} className="input-base mt-1" /></div>
-                <div><label className="text-xs font-bold text-slate-700">Margem</label><PercentInput value={form.marginPercent} onChange={(value) => setForm({ ...form, marginPercent: value || 0 })} className="input-base pr-10 mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Preço de venda</label><CurrencyInput value={form.salePrice} onChange={(value) => setForm({ ...form, salePrice: value, salePriceProvided: value > 0 ? true : form.salePriceProvided, pricingProvided: true })} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Margem</label><PercentInput value={form.marginPercent} onChange={(value) => setForm({ ...form, marginPercent: value || 0, pricingProvided: true })} className="input-base pr-10 mt-1" /></div>
               </div>
               <div><label className="text-xs font-bold text-slate-700">Prazo de produção</label><input value={form.productionDeadline} onChange={(event) => setForm({ ...form, productionDeadline: event.target.value })} className="input-base mt-1" placeholder="Ex: 3 a 5 dias úteis" /></div>
             </section>
@@ -424,10 +427,10 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Dados internos</h3>
               <div><label className="text-xs font-bold text-slate-700">Descrição administrativa</label><textarea value={form.internalDescription} onChange={(event) => setForm({ ...form, internalDescription: event.target.value })} className="input-base mt-1" rows={2} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs font-bold text-slate-700">Custo de materiais</label><CurrencyInput value={form.materialCost} onChange={(value) => setForm({ ...form, materialCost: value })} className="input-base mt-1" /></div>
-                <div><label className="text-xs font-bold text-slate-700">Mão de obra</label><CurrencyInput value={form.laborCost} onChange={(value) => setForm({ ...form, laborCost: value })} className="input-base mt-1" /></div>
-                <div><label className="text-xs font-bold text-slate-700">Custo de produção</label><CurrencyInput value={form.productionCost} onChange={(value) => setForm({ ...form, productionCost: value })} className="input-base mt-1" /></div>
-                <div><label className="text-xs font-bold text-slate-700">Outras despesas</label><CurrencyInput value={form.otherCosts} onChange={(value) => setForm({ ...form, otherCosts: value })} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Custo de materiais</label><CurrencyInput value={form.materialCost} onChange={(value) => setForm({ ...form, materialCost: value, pricingProvided: true })} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Mão de obra</label><CurrencyInput value={form.laborCost} onChange={(value) => setForm({ ...form, laborCost: value, pricingProvided: true })} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Custo de produção</label><CurrencyInput value={form.productionCost} onChange={(value) => setForm({ ...form, productionCost: value, pricingProvided: true })} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Outras despesas</label><CurrencyInput value={form.otherCosts} onChange={(value) => setForm({ ...form, otherCosts: value, pricingProvided: true })} className="input-base mt-1" /></div>
               </div>
               <div><label className="text-xs font-bold text-slate-700">Observações internas</label><textarea value={form.observations} onChange={(event) => setForm({ ...form, observations: event.target.value })} className="input-base mt-1" rows={2} /></div>
             </section>

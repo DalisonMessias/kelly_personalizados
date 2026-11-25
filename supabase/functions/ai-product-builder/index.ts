@@ -170,10 +170,9 @@ async function saveApiKey(
     is_active: true,
     updated_at: new Date().toISOString(),
   };
-  const query = existing
-    ? admin.from(API_KEY_TABLE).update(values).eq('key_name', API_KEY_NAME)
-    : admin.from(API_KEY_TABLE).insert(values);
-  const { error } = await query;
+  const { error } = existing
+    ? await admin.from(API_KEY_TABLE).update(values).eq('key_name', API_KEY_NAME)
+    : await admin.from(API_KEY_TABLE).insert({ ...values, created_at: values.updated_at });
   if (error) throw new FunctionError(502, 'Não foi possível salvar a chave Gemini em api_keys. Confira o esquema e tente novamente.');
 
   return { configured: true, modelName };
