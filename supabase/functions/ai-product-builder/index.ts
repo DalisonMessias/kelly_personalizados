@@ -75,13 +75,37 @@ function parseJsonResponse(value: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-function explicitAmounts(description: string): number[] {
-  const matches = description.matchAll(/(?:R\$\s*|\b(?:preço|preco|valor|custo|margem)\b[^\d%]{0,18})(\d{1,7}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:\.\d{1,2})?)(\s*%?)/gi);
-  return Array.from(matches, (match) => {
-    const raw = match[1].includes(',') ? match[1].replace(/\./g, '').replace(',', '.') : match[1];
-    const amount = Number(raw);
-    return Number.isFinite(amount) && amount >= 0 ? amount : NaN;
-  }).filter(Number.isFinite);
+function parseBrazilianNumber(raw: string): number {
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : /\.\d{3}(?:$|\D)/.test(raw) ? raw.replace(/\./g, '') : raw;
+  return Number(normalized);
+}
+
+function explicitCurrencyAmounts(description: string, label: RegExp): number[] {
+  const values: number[] = [];
+  const matches = description.matchAll(/R\$\s*(\d{1,7}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?![\d.,])/gi);
+  for (const match of matches) {
+    const index = match.index ?? 0;
+    const context = description.slice(Math.max(0, index - 70), Math.min(description.length, index + match[0].length + 35));
+    if (!label.test(context)) continue;
+    const value = parseBrazilianNumber(match[1]);
+    if (Number.isFinite(value) && value >= 0) values.push(value);
+  }
+  return values;
+}
+
+function explicitMargins(description: string): number[] {
+  const values: number[] = [];
+  const matches = description.matchAll(/(\d{1,3}(?:[.,]\d{1,2})?)\s*%(?!\d)/g);
+  for (const match of matches) {
+    const index = match.index ?? 0;
+    const context = description.slice(Math.max(0, index - 60), Math.min(description.length, index + match[0].length + 25));
+    if (!/margem/i.test(context)) continue;
+    const value = parseBrazilianNumber(match[1]);
+    if (Number.isFinite(value) && value >= 0 && value <= 100) values.push(value);
+  }
+  return values;
 }
 
 function safeText(value: unknown, maxLength = 1000): string {
@@ -107,8 +131,14 @@ function normalizeProduct(value: Record<string, unknown>, description: string) {
     throw new FunctionError(502, 'A IA não preencheu os campos obrigatórios. Revise a descrição e tente novamente.');
   }
 
-  const allowedAmounts = explicitAmounts(description);
+  const salePriceAmounts = explicitCurrencyAmounts(description, /pre[cç]o(?:\s+de\s+venda)?|valor\s+(?:de\s+venda|final)/i);
+  const productionCostAmounts = explicitCurrencyAmounts(description, /custo\s+(?:de\s+)?produ[cç][aã]o|custo\s+total(?:\s+de\s+produ[cç][aã]o)?/i);
+  const materialCostAmounts = explicitCurrencyAmounts(description, /custo\s+(?:de\s+)?materiais?|materiais?\s+(?:custam|custa)/i);
+  const laborCostAmounts = explicitCurrencyAmounts(description, /custo\s+(?:de\s+)?m[aã]o\s+de\s+obra|m[aã]o\s+de\s+obra\s+(?:custa|custo)/i);
+  const otherCostAmounts = explicitCurrencyAmounts(description, /outras?\s+despesas|outros?\s+custos|custo\s+de\s+(?:embalagem|energia|acabamento)/i);
+  const marginAmounts = explicitMargins(description);
   const dimensions = safeText(value.dimensions, 120);
+  const marginPercent = safePrice(value.margin_percent, marginAmounts);
   return {
     name,
     description: productDescription,
@@ -121,12 +151,12 @@ function normalizeProduct(value: Record<string, unknown>, description: string) {
     saleUnit: safeText(value.sale_unit, 50) || 'Unidade',
     keywords: safeList(value.keywords, 20),
     additionalInfo: safeText(value.additional_info, 1200),
-    salePrice: safePrice(value.sale_price, allowedAmounts),
-    productionCost: safePrice(value.production_cost, allowedAmounts),
-    materialCost: safePrice(value.material_cost, allowedAmounts),
-    laborCost: safePrice(value.labor_cost, allowedAmounts),
-    otherCosts: safePrice(value.other_costs, allowedAmounts),
-    marginPercent: safePrice(value.margin_percent, allowedAmounts),
+    salePrice: safePrice(value.sale_price, salePriceAmounts),
+    productionCost: safePrice(value.production_cost, productionCostAmounts),
+    materialCost: safePrice(value.material_cost, materialCostAmounts),
+    laborCost: safePrice(value.labor_cost, laborCostAmounts),
+    otherCosts: safePrice(value.other_costs, otherCostAmounts),
+    marginPercent: marginPercent !== null && marginPercent <= 100 ? marginPercent : null,
   };
 }
 
