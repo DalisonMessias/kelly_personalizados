@@ -1,16 +1,10 @@
-# Plano de tarefas — Criador de Produtos com IA
+# Plano de tarefas — Campos completos e valores sugeridos por IA
 
-[x] 1. Revisar checklist, documentação, Assistente IA, API atual, modelos do catálogo, sincronização Supabase e migrações existentes.
-[x] 2. Confirmar que o catálogo reutiliza os snapshots existentes e que a nova configuração de IA não usa shop_settings nem arquivos .env.
-[x] 3. Adicionar de forma aditiva a estrutura protegida api_keys em supabase_global_part3.sql, preservando tabelas e registros existentes.
-[x] 4. Criar a função Supabase protegida para armazenar a chave Gemini e gerar cadastros com saída validada.
-[x] 5. Criar no Assistente IA a ferramenta com descrição, prévia editável, nova geração, configuração segura da chave, salvar rascunho e cancelar.
-[x] 6. Ampliar a estrutura do catálogo para guardar dados técnicos, origem IA, preços não informados e estado de rascunho.
-[x] 7. Integrar categoria e salvamento ao repositório existente, sincronizar snapshots e manter o produto fora da loja.
-[x] 8. Atualizar o editor do Catálogo para exibir e permitir editar os novos campos e o estado rascunho.
-[x] 9. Incluir a nova função no comando de publicação já configurado no projeto.
-[x] 10. Verificar os tipos e a sintaxe; confirmar no código que o exemplo da sacola não recebe dimensões ou valores financeiros inventados.
-[ ] 11. Executar a validação ponta a ponta com Gemini e Supabase após aplicar a migração, publicar a função e configurar a chave no painel.
-[x] 12. Registrar as entregas concluídas no checklist acumulado e na base técnica.
+[x] 1. Revisar checklist, plano anterior, configuração do ateliê, tipos do catálogo e fluxo atual de geração e edição.
+[ ] 2. Atualizar a chamada da IA para receber os parâmetros de precificação já configurados no sistema.
+[ ] 3. Exigir campos preenchidos e estimativas identificadas para dimensões, ficha técnica, custos, preço, margem e demais campos da prévia.
+[ ] 4. Aplicar valores de contingência claros quando a resposta da IA vier incompleta, sem deixar campos vazios ou apresentar estimativas como confirmadas.
+[ ] 5. Sinalizar valores sugeridos pela IA na prévia, no catálogo e no editor; preservar o estado de rascunho e a publicação manual.
+[ ] 6. Verificar tipos e sintaxe, e registrar as alterações concluídas no checklist e na base de conhecimento.
 
-O fluxo reutiliza o catálogo e os snapshots Supabase existentes. A checagem estática passou; a execução real aguarda a preparação do projeto remoto descrita na tarefa 11.
+Os valores financeiros gerados serão sugestões aproximadas, usando os parâmetros existentes do ateliê e revisão do administrador antes de publicação.
