@@ -121,3 +121,13 @@
 
 - [x] Confirmação visual de que a interface agora identifica a versão desatualizada de system-backup e preserva os backups (src/services/supabaseFunctionErrors.ts)
 - [x] Verificação do comando de publicação já configurado e da indisponibilidade de painel de navegador nesta sessão; publicação e aplicação do esquema permanecem pendentes (package.json e documentation/TASK_LIST.md)
+
+- [x] Inclusão aditiva da estrutura protegida api_keys na migração global da parte 3 para guardar a chave Gemini sem expô-la ao navegador (supabase/migrations/supabase_global_part3.sql e supabase/functions/ai-product-builder/index.ts)
+- [x] Criação da função Supabase protegida para validar a chave Gemini, gerar cadastros estruturados e rejeitar preços e custos sem associação explícita ao respectivo campo (supabase/functions/ai-product-builder/index.ts)
+- [x] Inclusão do Criador de Produtos com IA no Assistente, com configuração da chave, geração novamente, prévia editável, cancelar e salvar rascunho (src/components/assistant/AssistantPage.tsx e src/components/assistant/CreateAiProductPanel.tsx)
+- [x] Integração ao catálogo e ao repositório existente com categoria, dados técnicos, origem IA, campos financeiros não informados e sincronização Supabase (src/types/index.ts, src/services/aiProductBuilderService.ts, src/services/storeRepository.ts e src/services/appDataSync.ts)
+- [x] Atualização do editor do Catálogo para exibir e permitir editar os campos gerados e o estado rascunho, mantendo o produto fora da loja até publicação manual (src/components/store-products/StoreProductsPage.tsx e supabase/migrations/supabase_global_part3.sql)
+- [x] Inclusão da função de criação com IA no comando de publicação já configurado no projeto (package.json)
+- [x] Verificação estática final concluída: TypeScript da aplicação sem diagnósticos e função hospedada sem erros de sintaxe; o teste real com Gemini e Supabase foi registrado como dependente de aplicação do esquema, publicação e configuração da chave
+- [x] Registro da associação segura de valores financeiros por campo e da solução para evitar confusão entre margem, desconto e desperdício na base de conhecimento técnica (supabase/functions/ai-product-builder/index.ts e documentation/continuous_learning_skills.md)
+- [x] Atualização do plano da solicitação atual sem remover entradas anteriores do checklist (documentation/TASK_LIST.md e checklist.txt)

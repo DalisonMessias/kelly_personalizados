@@ -100,3 +100,11 @@ Este documento centraliza e documenta todas as soluções técnicas, correções
 - **Causa identificada:** A interface e o código local enviam a ação de arquivamento, mas a versão publicada de `system-backup` ainda não contém essa rota.
 - **Solução aplicada:** O tratamento de respostas agora identifica essa mensagem e explica que a função está desatualizada, orientando a publicação da versão atualizada e informando que os dados dos backups continuam preservados.
 - **Prevenção:** Depois de adicionar uma ação à função hospedada, publicar `system-backup` antes de validar o fluxo pela interface.
+
+
+### Registro 13: Associação de valores financeiros no Criador de Produtos com IA
+
+- **Contexto:** O Criador de Produtos recebe valores monetários e percentuais por meio de uma descrição em linguagem natural.
+- **Causa identificada:** Uma busca em uma janela ampla do texto poderia aceitar o mesmo valor para campos próximos, como preço de venda e custo de materiais, ou confundir margem com desconto.
+- **Solução aplicada:** A validação agora associa cada valor em reais ao rótulo financeiro mais próximo antes dele e só aceita percentuais ligados ao rótulo de margem, distinguindo desconto, markup e desperdício. Também aceita o formato “40% de margem”.
+- **Prevenção:** Em geração estruturada por IA, validar cada valor pelo contexto do próprio campo e deixar o campo vazio quando não houver associação explícita; a solicitação de teste da sacola não fornece preços, custos, margem ou dimensões.

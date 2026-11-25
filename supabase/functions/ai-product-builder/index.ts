@@ -82,13 +82,34 @@ function parseBrazilianNumber(raw: string): number {
   return Number(normalized);
 }
 
-function explicitCurrencyAmounts(description: string, label: RegExp): number[] {
+const CURRENCY_FIELD_LABELS: Array<{ field: string; pattern: RegExp }> = [
+  { field: 'salePrice', pattern: /pre[cç]o(?:\s+de\s+venda)?|valor\s+(?:de\s+venda|final)/i },
+  { field: 'productionCost', pattern: /custo\s+(?:de\s+)?produ[cç][aã]o|custo\s+total(?:\s+de\s+produ[cç][aã]o)?/i },
+  { field: 'materialCost', pattern: /custo\s+(?:de\s+)?materia(?:l|is)|materia(?:l|is)\s+(?:custam|custa)/i },
+  { field: 'laborCost', pattern: /custo\s+(?:de\s+)?m[aã]o\s+de\s+obra|m[aã]o\s+de\s+obra\s+(?:custa|custo)/i },
+  { field: 'otherCosts', pattern: /outras?\s+despesas|outros?\s+custos|custo\s+de\s+(?:embalagem|energia|acabamento)/i },
+];
+
+function nearestCurrencyField(description: string, beforeIndex: number): string | null {
+  const start = Math.max(0, beforeIndex - 90);
+  const context = description.slice(start, beforeIndex);
+  let nearest: { field: string; index: number } | null = null;
+  for (const { field, pattern } of CURRENCY_FIELD_LABELS) {
+    const matcher = new RegExp(pattern.source, 'gi');
+    for (const match of context.matchAll(matcher)) {
+      const index = match.index ?? 0;
+      if (!nearest || index > nearest.index) nearest = { field, index };
+    }
+  }
+  return nearest?.field ?? null;
+}
+
+function explicitCurrencyAmounts(description: string, field: string): number[] {
   const values: number[] = [];
   const matches = description.matchAll(/R\$\s*(\d{1,7}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?![\d.,])/gi);
   for (const match of matches) {
     const index = match.index ?? 0;
-    const context = description.slice(Math.max(0, index - 70), Math.min(description.length, index + match[0].length + 35));
-    if (!label.test(context)) continue;
+    if (nearestCurrencyField(description, index) !== field) continue;
     const value = parseBrazilianNumber(match[1]);
     if (Number.isFinite(value) && value >= 0) values.push(value);
   }
@@ -100,8 +121,14 @@ function explicitMargins(description: string): number[] {
   const matches = description.matchAll(/(\d{1,3}(?:[.,]\d{1,2})?)\s*%(?!\d)/g);
   for (const match of matches) {
     const index = match.index ?? 0;
-    const context = description.slice(Math.max(0, index - 60), Math.min(description.length, index + match[0].length + 25));
-    if (!/margem/i.test(context)) continue;
+    const context = description.slice(Math.max(0, index - 70), index);
+    const concepts = [...context.matchAll(/\b(margem|desconto|markup|perda|desperd[ií]cio)\b/gi)];
+    const nearestConcept = concepts.at(-1);
+    const afterNumber = description.slice(index + match[0].length, index + match[0].length + 24);
+    const marginBefore = nearestConcept?.[1].toLocaleLowerCase('pt-BR') === 'margem' &&
+      !/[,.!?;\n]/.test(context.slice((nearestConcept.index ?? 0) + nearestConcept[0].length));
+    const marginAfter = !nearestConcept && /^\s*(?:de\s+)?margem\b/i.test(afterNumber);
+    if (!marginBefore && !marginAfter) continue;
     const value = parseBrazilianNumber(match[1]);
     if (Number.isFinite(value) && value >= 0 && value <= 100) values.push(value);
   }
@@ -131,11 +158,11 @@ function normalizeProduct(value: Record<string, unknown>, description: string) {
     throw new FunctionError(502, 'A IA não preencheu os campos obrigatórios. Revise a descrição e tente novamente.');
   }
 
-  const salePriceAmounts = explicitCurrencyAmounts(description, /pre[cç]o(?:\s+de\s+venda)?|valor\s+(?:de\s+venda|final)/i);
-  const productionCostAmounts = explicitCurrencyAmounts(description, /custo\s+(?:de\s+)?produ[cç][aã]o|custo\s+total(?:\s+de\s+produ[cç][aã]o)?/i);
-  const materialCostAmounts = explicitCurrencyAmounts(description, /custo\s+(?:de\s+)?materiais?|materiais?\s+(?:custam|custa)/i);
-  const laborCostAmounts = explicitCurrencyAmounts(description, /custo\s+(?:de\s+)?m[aã]o\s+de\s+obra|m[aã]o\s+de\s+obra\s+(?:custa|custo)/i);
-  const otherCostAmounts = explicitCurrencyAmounts(description, /outras?\s+despesas|outros?\s+custos|custo\s+de\s+(?:embalagem|energia|acabamento)/i);
+  const salePriceAmounts = explicitCurrencyAmounts(description, 'salePrice');
+  const productionCostAmounts = explicitCurrencyAmounts(description, 'productionCost');
+  const materialCostAmounts = explicitCurrencyAmounts(description, 'materialCost');
+  const laborCostAmounts = explicitCurrencyAmounts(description, 'laborCost');
+  const otherCostAmounts = explicitCurrencyAmounts(description, 'otherCosts');
   const marginAmounts = explicitMargins(description);
   const dimensions = safeText(value.dimensions, 120);
   const marginPercent = safePrice(value.margin_percent, marginAmounts);
