@@ -129,6 +129,11 @@ export async function getSystemBackup(backupId: string): Promise<SystemBackup> {
   return validateSystemBackup(result.backup);
 }
 
+export async function archiveSystemBackup(backupId: string): Promise<string> {
+  const result = await invokeBackup<{ message: string }>({ action: 'archive', backupId });
+  return result.message;
+}
+
 export async function restoreSystemBackup(backup: SystemBackup): Promise<string> {
   const validated = await validateSystemBackup(backup);
   await flushPendingCloudData();

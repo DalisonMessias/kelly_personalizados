@@ -1203,3 +1203,11 @@ begin
   end loop;
 end
 $$;
+
+-- Arquiva cópias do histórico sem apagar os dados originais.
+alter table public.kelly_admin_backup_history_v1
+  add column if not exists archived_at timestamptz;
+
+create index if not exists kelly_admin_backup_history_visible_created_idx
+  on public.kelly_admin_backup_history_v1 (created_at desc)
+  where archived_at is null;

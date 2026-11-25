@@ -109,3 +109,8 @@
 - [x] Integração do salvamento automático com exportação e restauração de cópias, aguardando a confirmação dos snapshots pendentes (src/components/settings/SettingsPage.tsx e src/services/appDataSync.ts)
 - [x] Inclusão aditiva da tabela existente de snapshots na publicação `supabase_realtime`, sem criar ou remover tabelas ou dados (supabase/migrations/supabase_global_part3.sql)
 - [x] Verificação de tipos da aplicação concluída sem diagnósticos; a validação ao vivo entre dois dispositivos depende de aplicar a atualização do esquema no Supabase (documentation/TASK_LIST.md)
+
+- [x] Inclusão aditiva do campo de arquivamento e índice parcial no histórico de backups, preservando os registros e os dados existentes (supabase/migrations/supabase_global_part3.sql)
+- [x] Implementação de listagem, leitura e arquivamento lógico de backups na função protegida, sem apagar conteúdo do banco (supabase/functions/system-backup/index.ts)
+- [x] Inclusão da ação de arquivar no serviço e dos botões Baixar e Excluir ao lado de Restaurar, com validação de integridade e confirmação personalizada (src/services/systemBackupService.ts e src/components/settings/SettingsPage.tsx)
+- [x] Atualização do plano da solicitação e registro das etapas concluídas; publicação da função e aplicação do esquema no Supabase seguem necessárias para ativar o recurso no ambiente online (documentation/TASK_LIST.md)

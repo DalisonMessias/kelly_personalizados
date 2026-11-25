@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { 
   Settings, 
   DownloadCloud, 
+  Download,
   UploadCloud, 
   RefreshCw, 
   Save, 
@@ -12,7 +13,8 @@ import {
   Percent,
   Clock,
   Printer,
-  Info
+  Info,
+  Trash2
 } from 'lucide-react';
 import { AppSettings } from '../../types';
 import { storageService, DEFAULT_SETTINGS } from '../../services/storage';
@@ -31,6 +33,7 @@ import { useToast } from '../ui/Toast';
 import { CurrencyInput } from '../ui/CurrencyInput';
 import { PercentInput } from '../ui/PercentInput';
 import {
+  archiveSystemBackup,
   createSystemBackup,
   downloadSystemBackup,
   getSystemBackup,
@@ -73,6 +76,7 @@ export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: Setti
   const [backupHistory, setBackupHistory] = useState<SystemBackupHistoryItem[]>([]);
   const [backupHistoryLoading, setBackupHistoryLoading] = useState(true);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [pendingBackupArchiveId, setPendingBackupArchiveId] = useState<string | null>(null);
 
   // Modais de confirmação
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -412,6 +416,34 @@ export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: Setti
     }
   };
 
+  const handleDownloadHistoryBackup = async (backupId: string) => {
+    setBackupBusy(true);
+    try {
+      const backup = await getSystemBackup(backupId);
+      downloadSystemBackup(backup);
+      success('Backup baixado', 'A cópia validada foi salva neste dispositivo.');
+    } catch (downloadError) {
+      error('Não foi possível baixar o backup', downloadError instanceof Error ? downloadError.message : 'Tente novamente em instantes.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const archiveSelectedBackup = async () => {
+    if (!pendingBackupArchiveId) return;
+    setBackupBusy(true);
+    try {
+      const message = await archiveSystemBackup(pendingBackupArchiveId);
+      setPendingBackupArchiveId(null);
+      success('Backup retirado do histórico', message);
+      await refreshBackupHistory();
+    } catch (archiveError) {
+      error('Não foi possível retirar o backup do histórico', archiveError instanceof Error ? archiveError.message : 'Tente novamente em instantes.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
   const discardUnsavedSettings = async () => {
     const settingsToRestore = { ...savedSettingsRef.current };
     await saveQueueRef.current.catch(() => false);
@@ -547,7 +579,7 @@ export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: Setti
           </div>
           {backupHistoryLoading ? <p className="py-5 text-center text-xs text-slate-500">Carregando histórico...</p>
             : backupHistory.length === 0 ? <p className="py-5 text-center text-xs text-slate-500">Ainda não há cópias salvas no histórico.</p>
-              : <div className="divide-y divide-slate-100">{backupHistory.map((backup) => <div key={backup.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"><span><strong className="block text-xs text-slate-800">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(backup.createdAt))}</strong><small className="text-[10px] text-slate-400">Integridade SHA-256: {backup.checksum.slice(0, 16)}…</small></span><button type="button" disabled={backupBusy} onClick={() => void prepareHistoryRestore(backup.id)} className="inline-flex min-h-9 items-center justify-center gap-2 self-start rounded-lg border border-brand-200 px-3 text-xs font-bold text-brand-700 transition hover:bg-brand-50 disabled:opacity-50 sm:self-auto"><UploadCloud className="h-3.5 w-3.5" /> Restaurar cópia</button></div>)}</div>}
+              : <div className="divide-y divide-slate-100">{backupHistory.map((backup) => <div key={backup.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"><span><strong className="block text-xs text-slate-800">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(backup.createdAt))}</strong><small className="text-[10px] text-slate-400">Integridade SHA-256: {backup.checksum.slice(0, 16)}…</small></span><div className="flex flex-wrap items-center gap-2 self-start sm:self-auto"><button type="button" disabled={backupBusy} onClick={() => void prepareHistoryRestore(backup.id)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-brand-200 px-3 text-xs font-bold text-brand-700 transition hover:bg-brand-50 disabled:opacity-50"><UploadCloud className="h-3.5 w-3.5" /> Restaurar cópia</button><button type="button" disabled={backupBusy} onClick={() => void handleDownloadHistoryBackup(backup.id)} title="Baixar cópia" className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"><Download className="h-3.5 w-3.5" /> Baixar</button><button type="button" disabled={backupBusy} onClick={() => setPendingBackupArchiveId(backup.id)} title="Retirar cópia do histórico" className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-rose-200 px-3 text-xs font-bold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> Excluir</button></div></div>)}</div>}
         </div>
       </div>
 
@@ -722,6 +754,17 @@ export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: Setti
         cancelText="Cancelar"
         variant="warning"
         onConfirm={() => { void confirmRestoreBackup(); }}
+      />
+
+      <CustomModal
+        isOpen={pendingBackupArchiveId !== null}
+        onClose={() => setPendingBackupArchiveId(null)}
+        title="Excluir cópia do histórico?"
+        description="A cópia deixará de aparecer nesta lista. O conteúdo e os dados do backup continuarão preservados no banco de dados."
+        confirmText="Excluir do histórico"
+        cancelText="Cancelar"
+        variant="warning"
+        onConfirm={() => { void archiveSelectedBackup(); }}
       />
 
       <CustomModal

@@ -191,6 +191,7 @@ Deno.serve(async (request) => {
     if (body.action === 'list') {
       const { data, error } = await admin.from(BACKUP_TABLE)
         .select('id,created_at,integrity_sha256')
+        .is('archived_at', null)
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw new FunctionError(502, 'Não foi possível carregar o histórico de cópias.');
@@ -198,11 +199,27 @@ Deno.serve(async (request) => {
     }
     if (body.action === 'get') {
       const backupId = typeof body.backupId === 'string' ? body.backupId : '';
-      const { data, error } = await admin.from(BACKUP_TABLE).select('backup_data').eq('id', backupId).maybeSingle();
+      const { data, error } = await admin.from(BACKUP_TABLE).select('backup_data')
+        .eq('id', backupId)
+        .is('archived_at', null)
+        .maybeSingle();
       if (error || !data) throw new FunctionError(404, 'Cópia de segurança não encontrada.');
       validateBackup(data.backup_data);
       await validateChecksum(data.backup_data);
       return response(request, { backup: data.backup_data });
+    }
+    if (body.action === 'archive') {
+      const backupId = typeof body.backupId === 'string' ? body.backupId : '';
+      if (!backupId) throw new FunctionError(400, 'Informe a cópia que deseja retirar do histórico.');
+      const { data, error } = await admin.from(BACKUP_TABLE)
+        .update({ archived_at: new Date().toISOString() })
+        .eq('id', backupId)
+        .is('archived_at', null)
+        .select('id')
+        .maybeSingle();
+      if (error) throw new FunctionError(502, 'Não foi possível retirar a cópia do histórico.');
+      if (!data) throw new FunctionError(404, 'Cópia de segurança não encontrada no histórico.');
+      return response(request, { message: 'Cópia retirada do histórico. O conteúdo foi preservado no banco de dados.' });
     }
     if (body.action === 'restore') {
       return response(request, await restoreBackup(admin, actor.id, body.backup));
