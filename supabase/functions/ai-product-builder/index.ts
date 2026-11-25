@@ -20,22 +20,25 @@ const PRODUCT_SCHEMA = {
     product_type: { type: 'string' },
     materials: { type: 'array', items: { type: 'string' } },
     technical_specs: { type: 'string', description: 'Gramatura, acabamento, alças e demais especificações informadas.' },
-    dimensions: { type: 'string', description: 'Dimensões somente quando fornecidas; caso contrário, string vazia.' },
+    dimensions: { type: 'string', description: 'Dimensões em centímetros. Se não foram informadas, incluir uma recomendação marcada como sugestão da IA.' },
     personalization_options: { type: 'array', items: { type: 'string' } },
     sale_unit: { type: 'string' },
     keywords: { type: 'array', items: { type: 'string' } },
     additional_info: { type: 'string' },
-    sale_price: { type: ['number', 'null'] },
-    production_cost: { type: ['number', 'null'] },
-    material_cost: { type: ['number', 'null'] },
-    labor_cost: { type: ['number', 'null'] },
-    other_costs: { type: ['number', 'null'] },
-    margin_percent: { type: ['number', 'null'] },
+    sale_price: { type: 'number', description: 'Preço de venda sugerido em reais, coerente com custos e margem.' },
+    production_cost: { type: 'number', description: 'Custo total estimado de produção em reais.' },
+    material_cost: { type: 'number', description: 'Custo estimado dos materiais em reais.' },
+    labor_cost: { type: 'number', description: 'Custo estimado da mão de obra em reais, considerando o valor-hora informado.' },
+    other_costs: { type: 'number', description: 'Estimativa positiva de embalagem, impressão, acabamento e outros custos em reais.' },
+    margin_percent: { type: 'number', description: 'Margem sugerida em percentual, considerando o parâmetro do ateliê.' },
+    estimated_production_minutes: { type: 'number', description: 'Tempo estimado de produção em minutos.' },
+    suggestion_notes: { type: 'string', description: 'Explicação das estimativas e do que o administrador deve confirmar.' },
   },
   required: [
     'name', 'description', 'category', 'product_type', 'materials', 'technical_specs',
     'dimensions', 'personalization_options', 'sale_unit', 'keywords', 'additional_info',
     'sale_price', 'production_cost', 'material_cost', 'labor_cost', 'other_costs', 'margin_percent',
+    'estimated_production_minutes', 'suggestion_notes',
   ],
 };
 
@@ -75,64 +78,40 @@ function parseJsonResponse(value: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-function parseBrazilianNumber(raw: string): number {
-  const normalized = raw.includes(',')
-    ? raw.replace(/\./g, '').replace(',', '.')
-    : /\.\d{3}(?:$|\D)/.test(raw) ? raw.replace(/\./g, '') : raw;
-  return Number(normalized);
+interface PricingContext {
+  defaultHourlyRate: number;
+  defaultWastePercentage: number;
+  defaultMarginPercentage: number;
+  defaultMarkupPercentage: number;
+  defaultInkCostPerSheet: number;
 }
 
-const CURRENCY_FIELD_LABELS: Array<{ field: string; pattern: RegExp }> = [
-  { field: 'salePrice', pattern: /pre[cç]o(?:\s+de\s+venda)?|valor\s+(?:de\s+venda|final)/i },
-  { field: 'productionCost', pattern: /custo\s+(?:de\s+)?produ[cç][aã]o|custo\s+total(?:\s+de\s+produ[cç][aã]o)?/i },
-  { field: 'materialCost', pattern: /custo\s+(?:de\s+)?materia(?:l|is)|materia(?:l|is)\s+(?:custam|custa)/i },
-  { field: 'laborCost', pattern: /custo\s+(?:de\s+)?m[aã]o\s+de\s+obra|m[aã]o\s+de\s+obra\s+(?:custa|custo)/i },
-  { field: 'otherCosts', pattern: /outras?\s+despesas|outros?\s+custos|custo\s+de\s+(?:embalagem|energia|acabamento)/i },
-];
+const SYSTEM_PRICING_DEFAULTS: PricingContext = {
+  defaultHourlyRate: 20,
+  defaultWastePercentage: 5,
+  defaultMarginPercentage: 40,
+  defaultMarkupPercentage: 70,
+  defaultInkCostPerSheet: 0.15,
+};
 
-function nearestCurrencyField(description: string, beforeIndex: number): string | null {
-  const start = Math.max(0, beforeIndex - 90);
-  const context = description.slice(start, beforeIndex);
-  let nearest: { field: string; index: number } | null = null;
-  for (const { field, pattern } of CURRENCY_FIELD_LABELS) {
-    const matcher = new RegExp(pattern.source, 'gi');
-    for (const match of context.matchAll(matcher)) {
-      const index = match.index ?? 0;
-      if (!nearest || index > nearest.index) nearest = { field, index };
-    }
-  }
-  return nearest?.field ?? null;
+function boundedNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 }
 
-function explicitCurrencyAmounts(description: string, field: string): number[] {
-  const values: number[] = [];
-  const matches = description.matchAll(/R\$\s*(\d{1,7}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?![\d.,])/gi);
-  for (const match of matches) {
-    const index = match.index ?? 0;
-    if (nearestCurrencyField(description, index) !== field) continue;
-    const value = parseBrazilianNumber(match[1]);
-    if (Number.isFinite(value) && value >= 0) values.push(value);
-  }
-  return values;
-}
-
-function explicitMargins(description: string): number[] {
-  const values: number[] = [];
-  const matches = description.matchAll(/(\d{1,3}(?:[.,]\d{1,2})?)\s*%(?!\d)/g);
-  for (const match of matches) {
-    const index = match.index ?? 0;
-    const context = description.slice(Math.max(0, index - 70), index);
-    const concepts = [...context.matchAll(/\b(margem|desconto|markup|perda|desperd[ií]cio)\b/gi)];
-    const nearestConcept = concepts.at(-1);
-    const afterNumber = description.slice(index + match[0].length, index + match[0].length + 24);
-    const marginBefore = nearestConcept?.[1].toLocaleLowerCase('pt-BR') === 'margem' &&
-      !/[,.!?;\n]/.test(context.slice((nearestConcept.index ?? 0) + nearestConcept[0].length));
-    const marginAfter = !nearestConcept && /^\s*(?:de\s+)?margem\b/i.test(afterNumber);
-    if (!marginBefore && !marginAfter) continue;
-    const value = parseBrazilianNumber(match[1]);
-    if (Number.isFinite(value) && value >= 0 && value <= 100) values.push(value);
-  }
-  return values;
+function normalizePricingContext(value: unknown): PricingContext {
+  const input = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return {
+    defaultHourlyRate: boundedNumber(input.defaultHourlyRate, SYSTEM_PRICING_DEFAULTS.defaultHourlyRate, 0, 10000),
+    defaultWastePercentage: boundedNumber(input.defaultWastePercentage, SYSTEM_PRICING_DEFAULTS.defaultWastePercentage, 0, 100),
+    defaultMarginPercentage: boundedNumber(input.defaultMarginPercentage, SYSTEM_PRICING_DEFAULTS.defaultMarginPercentage, 1, 90),
+    defaultMarkupPercentage: boundedNumber(input.defaultMarkupPercentage, SYSTEM_PRICING_DEFAULTS.defaultMarkupPercentage, 1, 500),
+    defaultInkCostPerSheet: boundedNumber(input.defaultInkCostPerSheet, SYSTEM_PRICING_DEFAULTS.defaultInkCostPerSheet, 0, 1000),
+  };
 }
 
 function safeText(value: unknown, maxLength = 1000): string {
@@ -145,58 +124,83 @@ function safeList(value: unknown, maxCount = 20): string[] {
     : [];
 }
 
-function safePrice(value: unknown, allowedAmounts: number[]): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
-  return allowedAmounts.some((amount) => Math.abs(amount - value) < 0.005) ? Number(value.toFixed(2)) : null;
+function safeSuggestedAmount(value: unknown, fallback: number, min = 0.01, max = 1000000): number {
+  return Number(boundedNumber(value, fallback, min, max).toFixed(2));
 }
 
-function normalizeProduct(value: Record<string, unknown>, description: string) {
-  const name = safeText(value.name, 160);
-  const productDescription = safeText(value.description, 2000);
-  const category = safeText(value.category, 80);
-  if (!name || !productDescription || !category) {
-    throw new FunctionError(502, 'A IA não preencheu os campos obrigatórios. Revise a descrição e tente novamente.');
-  }
-
-  const salePriceAmounts = explicitCurrencyAmounts(description, 'salePrice');
-  const productionCostAmounts = explicitCurrencyAmounts(description, 'productionCost');
-  const materialCostAmounts = explicitCurrencyAmounts(description, 'materialCost');
-  const laborCostAmounts = explicitCurrencyAmounts(description, 'laborCost');
-  const otherCostAmounts = explicitCurrencyAmounts(description, 'otherCosts');
-  const marginAmounts = explicitMargins(description);
-  const dimensions = safeText(value.dimensions, 120);
-  const marginPercent = safePrice(value.margin_percent, marginAmounts);
+function normalizeProduct(
+  value: Record<string, unknown>,
+  description: string,
+  categories: string[],
+  pricingContext: PricingContext,
+) {
+  const fallbackName = safeText(description.replace(/^(?:crie|criar|monte|fa[cç]a|desenvolva|quero)\s+(?:um|uma)?\s*/i, ''), 120) || 'Produto personalizado';
+  const name = safeText(value.name, 160) || `Produto Personalizado ${fallbackName}`.slice(0, 160);
+  const productDescription = safeText(value.description, 2000) || `${name}. Cadastro sugerido pela IA com base na solicitação: ${safeText(description, 1200)}`;
+  const inputCategory = categories.find((item) => description.toLocaleLowerCase('pt-BR').includes(item.toLocaleLowerCase('pt-BR')));
+  const category = safeText(value.category, 80) || inputCategory || 'Produtos Personalizados';
+  const productType = safeText(value.product_type, 120) || 'Produto personalizado';
+  const materials = safeList(value.materials);
+  if (!materials.length) materials.push('Sugestão da IA: material adequado ao uso descrito; confirmar fornecedor e composição antes da produção.');
+  const technicalSpecs = safeText(value.technical_specs, 800) || 'Sugestão da IA: confirmar material, acabamento e especificações finais antes da produção.';
+  const dimensions = safeText(value.dimensions, 160) || 'Sugestão da IA: definir medidas finais adequadas ao porte descrito e confirmar com o cliente.';
+  const personalizationOptions = safeList(value.personalization_options, 20);
+  if (!personalizationOptions.length) personalizationOptions.push('Personalização conforme preferência do cliente');
+  const saleUnit = safeText(value.sale_unit, 50) || 'Unidade';
+  const keywords = safeList(value.keywords, 20);
+  if (!keywords.length) keywords.push(...[name, category].filter(Boolean));
+  const estimatedProductionMinutes = safeSuggestedAmount(value.estimated_production_minutes, 30, 1, 600);
+  const marginPercent = safeSuggestedAmount(value.margin_percent, pricingContext.defaultMarginPercentage, 1, 90);
+  const materialCost = safeSuggestedAmount(value.material_cost, Math.max(0.01, pricingContext.defaultInkCostPerSheet * 4));
+  const laborCost = Number((pricingContext.defaultHourlyRate * estimatedProductionMinutes / 60).toFixed(2));
+  const otherCosts = safeSuggestedAmount(value.other_costs, Math.max(0.01, pricingContext.defaultInkCostPerSheet));
+  const componentEstimate = materialCost + laborCost + otherCosts;
+  const fallbackProductionCost = componentEstimate * (1 + pricingContext.defaultWastePercentage / 100);
+  const productionCost = Math.max(fallbackProductionCost, safeSuggestedAmount(value.production_cost, fallbackProductionCost));
+  const fallbackSalePrice = marginPercent < 95
+    ? productionCost / (1 - marginPercent / 100)
+    : productionCost * (1 + pricingContext.defaultMarkupPercentage / 100);
+  const calculatedMinimumPrice = productionCost / (1 - marginPercent / 100);
+  const salePrice = Number(Math.max(safeSuggestedAmount(value.sale_price, fallbackSalePrice), calculatedMinimumPrice).toFixed(2));
+  const suggestionNotes = safeText(value.suggestion_notes, 1200) ||
+    'Custos, preço, margem, dimensões e tempo são sugestões aproximadas da IA. Confirme materiais e custos locais antes de publicar.';
+  const additionalInfo = safeText(value.additional_info, 1200) || suggestionNotes;
   return {
     name,
     description: productDescription,
     category,
-    productType: safeText(value.product_type, 120),
-    materials: safeList(value.materials),
-    technicalSpecs: safeText(value.technical_specs, 800),
+    productType,
+    materials,
+    technicalSpecs,
     dimensions,
-    personalizationOptions: safeList(value.personalization_options, 20),
-    saleUnit: safeText(value.sale_unit, 50) || 'Unidade',
-    keywords: safeList(value.keywords, 20),
-    additionalInfo: safeText(value.additional_info, 1200),
-    salePrice: safePrice(value.sale_price, salePriceAmounts),
-    productionCost: safePrice(value.production_cost, productionCostAmounts),
-    materialCost: safePrice(value.material_cost, materialCostAmounts),
-    laborCost: safePrice(value.labor_cost, laborCostAmounts),
-    otherCosts: safePrice(value.other_costs, otherCostAmounts),
-    marginPercent: marginPercent !== null && marginPercent <= 100 ? marginPercent : null,
+    personalizationOptions,
+    saleUnit,
+    keywords,
+    additionalInfo,
+    salePrice,
+    productionCost,
+    materialCost,
+    laborCost,
+    otherCosts,
+    marginPercent,
+    estimatedProductionMinutes,
+    suggestionNotes,
+    aiSuggestedFields: ['salePrice', 'productionCost', 'materialCost', 'laborCost', 'otherCosts', 'marginPercent', 'estimatedProductionMinutes', 'dimensions'],
   };
 }
 
-function buildPrompt(description: string, categories: string[]): string {
-  return `Você transforma descrições de produtos personalizados em cadastros estruturados para um ateliê brasileiro.
-Use português do Brasil. Preserve apenas características fornecidas pelo administrador ou claramente contidas no pedido. Nunca invente dimensões, materiais, gramaturas, custos, preços, margens, prazos ou quantidades.
-Se o usuário não informar dimensões, retorne dimensions como string vazia. Só preencha preços, custos ou margem quando valores monetários explícitos forem fornecidos e puderem ser associados com segurança ao campo; caso contrário, retorne null em todos esses campos. Nunca estime valores.
+function buildPrompt(description: string, categories: string[], pricingContext: PricingContext): string {
+  return `Você transforma descrições de produtos personalizados em cadastros completos para um ateliê brasileiro.
+Use português do Brasil. Preencha todos os campos: não devolva textos vazios, listas vazias ou valores nulos. Para características que o administrador não informou, ofereça uma recomendação prática e identifique-a claramente como sugestão da IA; nunca apresente uma suposição como fato confirmado.
+Se não houver dimensões, sugira medidas aproximadas em centímetros coerentes com o produto e o porte descrito. Complete ficha técnica, materiais, personalização, palavras-chave e informações adicionais; diferencie dados informados das recomendações.
+Gere estimativas positivas para preço de venda, custo total de produção, materiais, mão de obra, outras despesas, margem e tempo em minutos. Os valores devem ser plausíveis para produção artesanal personalizada no Brasil. Use o valor-hora, a margem, o markup, o desperdício e o custo de tinta abaixo como parâmetros reais do ateliê. Estime os materiais de acordo com o produto; calcule mão de obra a partir do tempo e do valor-hora; inclua embalagem, acabamento e impressão em outras despesas quando fizer sentido; considere o desperdício no custo de produção. O preço de venda deve ser coerente com o custo e com a margem sugerida. Não trate estimativas como valores confirmados.
+Parâmetros atuais do ateliê: ${JSON.stringify(pricingContext)}.
 Para personalização sem detalhes fornecidos, use ["Conforme solicitação do cliente"]. Se a unidade não for indicada, use "Unidade".
 Use uma categoria existente se ela representar bem o produto. Caso nenhuma seja adequada, proponha uma categoria nova, curta e específica. Categorias existentes: ${JSON.stringify(categories)}.
-Crie palavras-chave relevantes a partir da descrição, sem adicionar características não informadas.
+Crie palavras-chave relevantes para busca. Em suggestion_notes, explique que valores e dados recomendados precisam ser revisados conforme os materiais e custos reais do ateliê.
 
 Exemplo de entrada: "Crie uma sacola personalizada de papel 180g, com alça de cordão, tamanho médio, para lembrancinhas."
-Resultado esperado: nome "Sacola Personalizada para Lembrancinhas"; descrição "Sacola personalizada confeccionada em papel de 180g, com alça de cordão, indicada para lembrancinhas, presentes e embalagens especiais."; categoria "Sacolas Personalizadas"; materials ["Papel 180g", "Cordão"]; technical_specs "Gramatura: 180g. Alça: cordão. Tamanho: médio."; dimensions ""; personalization_options ["Conforme solicitação do cliente"]; sale_unit "Unidade"; todos os campos de preço e custo null.
+Resultado esperado: nome "Sacola Personalizada para Lembrancinhas"; descrição completa em português; categoria "Sacolas Personalizadas"; materiais incluindo papel 180g e cordão; especificações com gramatura, alça e tamanho; dimensões numéricas aproximadas identificadas como sugestão; personalização conforme solicitação do cliente; unidade "Unidade"; palavras-chave e informações adicionais preenchidas; todos os custos, preço, margem e tempo preenchidos como estimativas identificadas, coerentes com os parâmetros do ateliê.
 
 Retorne somente o objeto JSON solicitado pelo esquema. Descrição do administrador: ${description}`;
 }
@@ -250,6 +254,7 @@ async function generateProduct(
   const categories = Array.isArray(body.categories)
     ? body.categories.filter((item): item is string => typeof item === 'string').map((item) => item.trim().slice(0, 80)).filter(Boolean).slice(0, 40)
     : [];
+  const pricingContext = normalizePricingContext(body.pricingContext);
   const modelId = MODEL_IDS[configuration.modelName];
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -262,8 +267,8 @@ async function generateProduct(
         'x-goog-api-key': configuration.apiKey,
       },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: 'Siga as instruções com rigor e não crie dados comerciais ou técnicos ausentes.' }] },
-        contents: [{ role: 'user', parts: [{ text: buildPrompt(description, categories) }] }],
+        systemInstruction: { parts: [{ text: 'Preencha todos os campos do cadastro. Quando faltar uma informação, forneça uma recomendação prática, indique que é uma sugestão da IA e nunca a apresente como dado confirmado.' }] },
+        contents: [{ role: 'user', parts: [{ text: buildPrompt(description, categories, pricingContext) }] }],
         generationConfig: {
           temperature: 0.2,
           maxOutputTokens: 2200,
@@ -287,7 +292,7 @@ async function generateProduct(
       .join('') ?? '';
     if (!text) throw new FunctionError(502, 'O Gemini não retornou um cadastro de produto. Tente novamente.');
 
-    return normalizeProduct(parseJsonResponse(text), description);
+    return normalizeProduct(parseJsonResponse(text), description, categories, pricingContext);
   } catch (error) {
     if (error instanceof FunctionError) throw error;
     if (error instanceof Error && error.name === 'AbortError') throw new FunctionError(504, 'A geração excedeu o tempo de resposta. Tente novamente.');

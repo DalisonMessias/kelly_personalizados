@@ -39,6 +39,8 @@ interface StoreProductsPageProps {
   onSendToCalculator: (product: ProductService) => void;
 }
 
+type StoreProductFinancialField = 'salePrice' | 'marginPercent' | 'productionCost' | 'laborCost' | 'materialCost' | 'otherCosts' | 'estimatedProductionTime';
+
 const categoryLabels: Record<ProductCategory, string> = {
   adesivos: 'Adesivos',
   topo_bolo: 'Topo de bolo',
@@ -111,6 +113,16 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
   const openEditor = (product?: StoreProduct) => {
     setForm(product ? JSON.parse(JSON.stringify(product)) : blankStoreProduct());
     setEditorOpen(true);
+  };
+
+  const updateFinancialField = (field: StoreProductFinancialField, value: number) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+      pricingProvided: true,
+      aiSuggestedFields: (current.aiSuggestedFields || []).filter((suggestedField) => suggestedField !== field),
+      ...(field === 'salePrice' ? { salePriceSuggested: false, salePriceProvided: value > 0 } : {}),
+    }));
   };
 
   const handleUploadImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,7 +375,7 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
               </div>
               <p className="text-[11px] font-semibold text-slate-500">{categoryOptions.find((category) => category.value === product.category)?.label || product.category}</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="p-2.5 rounded-xl bg-pink-50 border border-pink-100"><span className="text-slate-500 block">Preço</span><strong className="text-brand-700">{product.salePriceProvided === false ? 'Não informado' : formatCurrency(product.salePrice)}</strong></div>
+                <div className="p-2.5 rounded-xl bg-pink-50 border border-pink-100"><span className="text-slate-500 block">{product.aiSuggestedFields?.includes('salePrice') ? 'Preço · sugestão da IA' : 'Preço'}</span><strong className="text-brand-700">{product.salePriceProvided === false ? 'Não informado' : formatCurrency(product.salePrice)}</strong></div>
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><span className="text-slate-500 block">Loja futura</span><strong className="text-slate-700">{product.showInFutureStore ? 'Exibir' : 'Oculto'}</strong></div>
               </div>
               <div className="flex items-center justify-between pt-3 border-t border-pink-100">
@@ -409,16 +421,18 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
                   <div><label className="text-xs font-bold text-slate-700">Unidade de venda</label><input value={form.saleUnit || ''} onChange={(event) => setForm({ ...form, saleUnit: event.target.value })} className="input-base mt-1" /></div>
                   <div><label className="text-xs font-bold text-slate-700">Materiais utilizados</label><textarea value={(form.materials || []).join('\n')} onChange={(event) => setForm({ ...form, materials: event.target.value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean) })} className="input-base mt-1 resize-none" rows={3} /></div>
                   <div><label className="text-xs font-bold text-slate-700">Gramatura e especificações</label><textarea value={form.technicalSpecs || ''} onChange={(event) => setForm({ ...form, technicalSpecs: event.target.value })} className="input-base mt-1 resize-none" rows={3} /></div>
-                  <div><label className="text-xs font-bold text-slate-700">Dimensões</label><input value={form.dimensions || ''} onChange={(event) => setForm({ ...form, dimensions: event.target.value })} className="input-base mt-1" /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Dimensões{form.aiSuggestedFields?.includes('dimensions') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><input value={form.dimensions || ''} onChange={(event) => setForm({ ...form, dimensions: event.target.value, aiSuggestedFields: (form.aiSuggestedFields || []).filter((field) => field !== 'dimensions') })} className="input-base mt-1" /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Tempo estimado (minutos){form.aiSuggestedFields?.includes('estimatedProductionTime') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><input type="number" min="0" value={form.estimatedProductionTime} onChange={(event) => updateFinancialField('estimatedProductionTime', Number(event.target.value))} className="input-base mt-1" /></div>
                   <div><label className="text-xs font-bold text-slate-700">Orientações de personalização</label><textarea value={form.personalizationInstructions || ''} onChange={(event) => setForm({ ...form, personalizationInstructions: event.target.value })} className="input-base mt-1 resize-none" rows={2} /></div>
                   <div><label className="text-xs font-bold text-slate-700">Palavras-chave</label><textarea value={(form.keywords || []).join(', ')} onChange={(event) => setForm({ ...form, keywords: event.target.value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean) })} className="input-base mt-1 resize-none" rows={2} /></div>
                   <div><label className="text-xs font-bold text-slate-700">Informações adicionais</label><textarea value={form.additionalInfo || ''} onChange={(event) => setForm({ ...form, additionalInfo: event.target.value })} className="input-base mt-1 resize-none" rows={2} /></div>
+                  <div className="sm:col-span-2"><label className="text-xs font-bold text-slate-700">Base das sugestões</label><textarea value={form.suggestionNotes || ''} onChange={(event) => setForm({ ...form, suggestionNotes: event.target.value })} className="input-base mt-1 resize-none" rows={2} /></div>
                 </div>
-                {form.creationOrigin === 'ia' && !form.pricingProvided && <p className="text-[11px] text-slate-500">A IA não informou custos ou preços suficientes. Os valores zerados ainda não estão cadastrados.</p>}
+                {form.creationOrigin === 'ia' && (form.aiSuggestedFields?.length || 0) > 0 && <p className="text-[11px] text-slate-500">Os campos marcados são estimativas da IA. Confira os custos reais e atualize os valores antes de publicar.</p>}
               </section>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs font-bold text-slate-700">Preço de venda</label><CurrencyInput value={form.salePrice} onChange={(value) => setForm({ ...form, salePrice: value, salePriceProvided: value > 0 ? true : form.salePriceProvided, pricingProvided: true })} className="input-base mt-1" /></div>
-                <div><label className="text-xs font-bold text-slate-700">Margem</label><PercentInput value={form.marginPercent} onChange={(value) => setForm({ ...form, marginPercent: value || 0, pricingProvided: true })} className="input-base pr-10 mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Preço de venda{form.aiSuggestedFields?.includes('salePrice') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><CurrencyInput value={form.salePrice} onChange={(value) => updateFinancialField('salePrice', value)} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Margem{form.aiSuggestedFields?.includes('marginPercent') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><PercentInput value={form.marginPercent} onChange={(value) => updateFinancialField('marginPercent', value || 0)} className="input-base pr-10 mt-1" /></div>
               </div>
               <div><label className="text-xs font-bold text-slate-700">Prazo de produção</label><input value={form.productionDeadline} onChange={(event) => setForm({ ...form, productionDeadline: event.target.value })} className="input-base mt-1" placeholder="Ex: 3 a 5 dias úteis" /></div>
             </section>
@@ -427,10 +441,10 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Dados internos</h3>
               <div><label className="text-xs font-bold text-slate-700">Descrição administrativa</label><textarea value={form.internalDescription} onChange={(event) => setForm({ ...form, internalDescription: event.target.value })} className="input-base mt-1" rows={2} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs font-bold text-slate-700">Custo de materiais</label><CurrencyInput value={form.materialCost} onChange={(value) => setForm({ ...form, materialCost: value, pricingProvided: true })} className="input-base mt-1" /></div>
-                <div><label className="text-xs font-bold text-slate-700">Mão de obra</label><CurrencyInput value={form.laborCost} onChange={(value) => setForm({ ...form, laborCost: value, pricingProvided: true })} className="input-base mt-1" /></div>
-                <div><label className="text-xs font-bold text-slate-700">Custo de produção</label><CurrencyInput value={form.productionCost} onChange={(value) => setForm({ ...form, productionCost: value, pricingProvided: true })} className="input-base mt-1" /></div>
-                <div><label className="text-xs font-bold text-slate-700">Outras despesas</label><CurrencyInput value={form.otherCosts} onChange={(value) => setForm({ ...form, otherCosts: value, pricingProvided: true })} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Custo de materiais{form.aiSuggestedFields?.includes('materialCost') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><CurrencyInput value={form.materialCost} onChange={(value) => updateFinancialField('materialCost', value)} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Mão de obra{form.aiSuggestedFields?.includes('laborCost') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><CurrencyInput value={form.laborCost} onChange={(value) => updateFinancialField('laborCost', value)} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Custo de produção{form.aiSuggestedFields?.includes('productionCost') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><CurrencyInput value={form.productionCost} onChange={(value) => updateFinancialField('productionCost', value)} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Outras despesas{form.aiSuggestedFields?.includes('otherCosts') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><CurrencyInput value={form.otherCosts} onChange={(value) => updateFinancialField('otherCosts', value)} className="input-base mt-1" /></div>
               </div>
               <div><label className="text-xs font-bold text-slate-700">Observações internas</label><textarea value={form.observations} onChange={(event) => setForm({ ...form, observations: event.target.value })} className="input-base mt-1" rows={2} /></div>
             </section>

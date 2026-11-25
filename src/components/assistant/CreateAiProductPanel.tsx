@@ -4,6 +4,7 @@ import { AiProductDraft, AiProductModel, StoreCategory, StoreProduct } from '../
 import { generateAiProductDraft, getAiProductBuilderStatus, saveAiProductBuilderKey } from '../../services/aiProductBuilderService';
 import { storeRepository } from '../../services/storeRepository';
 import { flushPendingCloudData } from '../../services/appDataSync';
+import { storageService } from '../../services/storage';
 import { CustomModal } from '../ui/CustomModal';
 import { CustomSelect } from '../ui/CustomSelect';
 import { useToast } from '../ui/Toast';
@@ -13,6 +14,7 @@ interface CreateAiProductPanelProps {
 }
 
 const SAMPLE_DESCRIPTION = 'Crie uma sacola personalizada de papel 180g, com alça de cordão, tamanho médio, para lembrancinhas.';
+const AI_SUGGESTION_FIELDS = ['salePrice', 'productionCost', 'materialCost', 'laborCost', 'otherCosts', 'marginPercent', 'estimatedProductionMinutes', 'dimensions'] as const;
 
 const MODEL_OPTIONS: Array<{ value: AiProductModel; label: string; hint: string }> = [
   { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', hint: 'Mais detalhado' },
@@ -103,7 +105,14 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
   }, []);
 
   const updateDraft = <K extends keyof AiProductDraft>(key: K, value: AiProductDraft[K]) => {
-    setDraft((current) => current ? { ...current, [key]: value } : current);
+    setDraft((current) => {
+      if (!current) return current;
+      const updated = { ...current, [key]: value };
+      if (AI_SUGGESTION_FIELDS.some((field) => field === key)) {
+        updated.aiSuggestedFields = current.aiSuggestedFields.filter((field) => field !== key);
+      }
+      return updated;
+    });
   };
 
   const handleSaveKey = async () => {
@@ -142,7 +151,15 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
     setIsGenerating(true);
     setConfigurationError('');
     try {
-      const generated = await generateAiProductDraft(description, categoryNames);
+      const settings = storageService.getSettings();
+      const pricingContext = {
+        defaultHourlyRate: settings.defaultHourlyRate,
+        defaultWastePercentage: settings.defaultWastePercentage,
+        defaultMarginPercentage: settings.defaultMarginPercentage,
+        defaultMarkupPercentage: settings.defaultMarkupPercentage,
+        defaultInkCostPerSheet: settings.defaultInkCostPerSheet,
+      };
+      const generated = await generateAiProductDraft(description, categoryNames, pricingContext);
       setDraft(generated);
       saveProductIdRef.current = null;
       success('Prévia pronta', 'Revise e edite os campos antes de salvar o produto no catálogo.');
@@ -157,8 +174,13 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
 
   const handleSaveProduct = async () => {
     if (!draft) return;
-    if (!draft.name.trim() || !draft.description.trim() || !draft.category.trim()) {
-      warning('Revise os campos obrigatórios', 'Nome, descrição e categoria precisam estar preenchidos.');
+    const requiredTexts = [draft.name, draft.description, draft.category, draft.productType, draft.technicalSpecs,
+      draft.dimensions, draft.saleUnit, draft.additionalInfo, draft.suggestionNotes];
+    const requiredNumbers = [draft.salePrice, draft.productionCost, draft.materialCost, draft.laborCost,
+      draft.otherCosts, draft.marginPercent, draft.estimatedProductionMinutes];
+    if (requiredTexts.some((value) => !value.trim()) || !draft.materials.length || !draft.personalizationOptions.length ||
+      !draft.keywords.length || requiredNumbers.some((value) => !Number.isFinite(value) || value < 0)) {
+      warning('Revise o cadastro completo', 'Preencha todos os campos e mantenha os valores sugeridos antes de salvar.');
       return;
     }
 
@@ -184,20 +206,22 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
         saleUnit: draft.saleUnit.trim() || 'Unidade',
         keywords: draft.keywords.map((item) => item.trim()).filter(Boolean),
         additionalInfo: draft.additionalInfo.trim(),
+        suggestionNotes: draft.suggestionNotes.trim(),
+        aiSuggestedFields: [...draft.aiSuggestedFields],
         creationOrigin: 'ia',
-        pricingProvided: draft.salePrice !== null || draft.productionCost !== null || draft.materialCost !== null ||
-          draft.laborCost !== null || draft.otherCosts !== null || draft.marginPercent !== null,
-        salePriceProvided: draft.salePrice !== null,
+        pricingProvided: true,
+        salePriceProvided: true,
+        salePriceSuggested: draft.aiSuggestedFields.includes('salePrice'),
         imageIds: [],
         minimumQuantity: 1,
         productionDeadline: '',
-        salePrice: draft.salePrice ?? 0,
-        marginPercent: draft.marginPercent ?? 0,
-        productionCost: draft.productionCost ?? 0,
-        laborCost: draft.laborCost ?? 0,
-        materialCost: draft.materialCost ?? 0,
-        otherCosts: draft.otherCosts ?? 0,
-        estimatedProductionTime: 0,
+        salePrice: draft.salePrice,
+        marginPercent: draft.marginPercent,
+        productionCost: draft.productionCost,
+        laborCost: draft.laborCost,
+        materialCost: draft.materialCost,
+        otherCosts: draft.otherCosts,
+        estimatedProductionTime: draft.estimatedProductionMinutes,
         timeUnit: 'minutes',
         status: 'rascunho',
         showInFutureStore: false,
@@ -255,7 +279,7 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
           <div className="mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand-600" /><h2 className="text-sm font-black text-slate-800">Descrição do produto</h2></div>
           <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} maxLength={4000} className="input-base min-h-28 resize-none" placeholder="Ex.: Sacola personalizada de papel 180g, com alça de cordão, tamanho médio, para lembrancinhas." />
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-[11px] text-slate-500">A IA não inventará dimensões, custos ou preços ausentes da descrição.</span>
+            <span className="text-[11px] text-slate-500">A IA completa os campos e identifica estimativas para você revisar.</span>
             <button type="button" onClick={() => void handleGenerate()} disabled={isGenerating || isCheckingKey || !isConfigured} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50">
               {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{draft ? 'Gerar novamente' : 'Gerar cadastro'}
             </button>
@@ -281,7 +305,7 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
         {draft ? (
           <section className="space-y-5 rounded-2xl border border-brand-100 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><div className="flex items-center gap-2"><h2 className="text-sm font-black text-slate-900">Prévia do cadastro</h2><span className="rounded-full bg-pink-50 px-2 py-1 text-[10px] font-bold text-brand-700">Criado por IA</span></div><p className="mt-1 text-xs text-slate-500">Edite os campos antes de salvar. O produto ficará oculto da loja.</p></div>
+              <div><div className="flex items-center gap-2"><h2 className="text-sm font-black text-slate-900">Prévia do cadastro</h2><span className="rounded-full bg-pink-50 px-2 py-1 text-[10px] font-bold text-brand-700">Criado por IA</span></div><p className="mt-1 text-xs text-slate-500">A IA completa os campos e identifica estimativas. Confira os dados antes de salvar; o produto ficará oculto da loja.</p></div>
               <button type="button" onClick={() => void handleGenerate()} disabled={isGenerating || !isConfigured} className="inline-flex min-h-9 items-center justify-center gap-2 self-start rounded-lg border border-pink-200 px-3 text-xs font-bold text-brand-700 transition hover:bg-pink-50 disabled:opacity-50 sm:self-auto">{isGenerating ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Solicitar nova geração</button>
             </div>
 
@@ -292,7 +316,7 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
               <div><label className="mb-1 block text-xs font-bold text-slate-700">Tipo de produto</label><input value={draft.productType} onChange={(event) => updateDraft('productType', event.target.value)} className="input-base" /></div>
               <div><label className="mb-1 block text-xs font-bold text-slate-700">Materiais</label><textarea value={draft.materials.join('\n')} onChange={(event) => updateDraft('materials', toLineList(event.target.value))} rows={3} className="input-base resize-none" placeholder="Um material por linha" /></div>
               <div><label className="mb-1 block text-xs font-bold text-slate-700">Gramatura e especificações técnicas</label><textarea value={draft.technicalSpecs} onChange={(event) => updateDraft('technicalSpecs', event.target.value)} rows={3} className="input-base resize-none" /></div>
-              <div><label className="mb-1 block text-xs font-bold text-slate-700">Dimensões informadas</label><input value={draft.dimensions} onChange={(event) => updateDraft('dimensions', event.target.value)} className="input-base" placeholder="Não informado" /></div>
+              <div><label className="mb-1 block text-xs font-bold text-slate-700">Dimensões sugeridas</label><input value={draft.dimensions} onChange={(event) => updateDraft('dimensions', event.target.value)} className="input-base" /></div>
               <div><label className="mb-1 block text-xs font-bold text-slate-700">Unidade de venda</label><input value={draft.saleUnit} onChange={(event) => updateDraft('saleUnit', event.target.value)} className="input-base" /></div>
               <div><label className="mb-1 block text-xs font-bold text-slate-700">Opções de personalização</label><textarea value={draft.personalizationOptions.join('\n')} onChange={(event) => updateDraft('personalizationOptions', toLineList(event.target.value))} rows={3} className="input-base resize-none" placeholder="Uma opção por linha" /></div>
               <div><label className="mb-1 block text-xs font-bold text-slate-700">Palavras-chave</label><textarea value={draft.keywords.join(', ')} onChange={(event) => updateDraft('keywords', toLineList(event.target.value))} rows={3} className="input-base resize-none" placeholder="Separe por vírgula ou linha" /></div>
@@ -300,7 +324,7 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
             </div>
 
             <section className="space-y-3 border-t border-slate-100 pt-4">
-              <div><h3 className="text-xs font-black uppercase tracking-wide text-slate-700">Custos e preços</h3><p className="mt-1 text-[11px] text-slate-500">Campos em branco significam que a solicitação não trouxe dados suficientes. Nenhum valor foi estimado.</p></div>
+              <div><h3 className="text-xs font-black uppercase tracking-wide text-slate-700">Custos e preços sugeridos</h3><p className="mt-1 text-[11px] text-slate-500">São estimativas da IA, calculadas considerando os parâmetros do ateliê. Confira os custos reais antes de publicar.</p></div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {([
                   ['salePrice', 'Preço de venda (R$)'],
@@ -309,8 +333,10 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
                   ['laborCost', 'Custo de mão de obra (R$)'],
                   ['otherCosts', 'Outras despesas (R$)'],
                   ['marginPercent', 'Margem (%)'],
-                ] as const).map(([key, label]) => <div key={key}><label className="mb-1 block text-xs font-bold text-slate-700">{label}</label><input type="number" min="0" max={key === 'marginPercent' ? 100 : undefined} step="0.01" value={draft[key] ?? ''} onChange={(event) => updateDraft(key, event.target.value === '' ? null : Number(event.target.value))} className="input-base" placeholder="Não informado" /></div>)}
+                ] as const).map(([key, label]) => <div key={key}><label className="mb-1 block text-xs font-bold text-slate-700">{label}{draft.aiSuggestedFields.includes(key) && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><input type="number" min="0" max={key === 'marginPercent' ? 100 : undefined} step="0.01" value={draft[key]} onChange={(event) => updateDraft(key, Number(event.target.value))} className="input-base" /></div>)}
+                <div><label className="mb-1 block text-xs font-bold text-slate-700">Tempo estimado (minutos){draft.aiSuggestedFields.includes('estimatedProductionMinutes') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><input type="number" min="0" step="1" value={draft.estimatedProductionMinutes} onChange={(event) => updateDraft('estimatedProductionMinutes', Number(event.target.value))} className="input-base" /></div>
               </div>
+              <div><label className="mb-1 block text-xs font-bold text-slate-700">Base das sugestões</label><textarea value={draft.suggestionNotes} onChange={(event) => updateDraft('suggestionNotes', event.target.value)} rows={2} className="input-base resize-none" /></div>
             </section>
 
             <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">

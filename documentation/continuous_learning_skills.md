@@ -108,3 +108,11 @@ Este documento centraliza e documenta todas as soluções técnicas, correções
 - **Causa identificada:** Uma busca em uma janela ampla do texto poderia aceitar o mesmo valor para campos próximos, como preço de venda e custo de materiais, ou confundir margem com desconto.
 - **Solução aplicada:** A validação agora associa cada valor em reais ao rótulo financeiro mais próximo antes dele e só aceita percentuais ligados ao rótulo de margem, distinguindo desconto, markup e desperdício. Também aceita o formato “40% de margem”.
 - **Prevenção:** Em geração estruturada por IA, validar cada valor pelo contexto do próprio campo e deixar o campo vazio quando não houver associação explícita; a solicitação de teste da sacola não fornece preços, custos, margem ou dimensões.
+
+
+### Registro 14: Campos completos e valores sugeridos no Criador de Produtos com IA
+
+- **Contexto:** O administrador pediu que a prévia gerada não tenha campos vazios e que inclua sugestões de custo, preço e margem.
+- **Causa identificada:** A primeira versão seguia a regra anterior de não estimar valores ausentes e devolvia campos vazios ou nulos quando o pedido não trazia informações comerciais ou medidas.
+- **Solução aplicada:** A geração agora exige valores numéricos e textos completos, apresenta medidas e custos ausentes como sugestões da IA, usa os parâmetros reais de valor-hora, margem, markup, desperdício e tinta, calcula a mão de obra pelo valor-hora e evita sugerir preço abaixo do custo e da margem. As sugestões são sinalizadas e editáveis no Assistente e no Catálogo.
+- **Prevenção:** Separar recomendações de IA de dados confirmados, persistir essa indicação com o produto e validar que todos os campos estão preenchidos antes de salvar ou publicar.

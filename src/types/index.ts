@@ -323,6 +323,9 @@ export interface StoreProduct {
   creationOrigin?: 'manual' | 'ia';
   pricingProvided?: boolean;
   salePriceProvided?: boolean;
+  salePriceSuggested?: boolean;
+  aiSuggestedFields?: string[];
+  suggestionNotes?: string;
   imageIds: string[];
   linkedServiceId?: string;
   linkedCalculationId?: string;
@@ -359,12 +362,15 @@ export interface AiProductDraft {
   saleUnit: string;
   keywords: string[];
   additionalInfo: string;
-  salePrice: number | null;
-  productionCost: number | null;
-  materialCost: number | null;
-  laborCost: number | null;
-  otherCosts: number | null;
-  marginPercent: number | null;
+  salePrice: number;
+  productionCost: number;
+  materialCost: number;
+  laborCost: number;
+  otherCosts: number;
+  marginPercent: number;
+  estimatedProductionMinutes: number;
+  suggestionNotes: string;
+  aiSuggestedFields: string[];
 }
 
 export interface StoreCategory {

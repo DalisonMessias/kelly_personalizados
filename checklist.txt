@@ -131,3 +131,12 @@
 - [x] Verificação estática final concluída: TypeScript da aplicação sem diagnósticos e função hospedada sem erros de sintaxe; o teste real com Gemini e Supabase foi registrado como dependente de aplicação do esquema, publicação e configuração da chave
 - [x] Registro da associação segura de valores financeiros por campo e da solução para evitar confusão entre margem, desconto e desperdício na base de conhecimento técnica (supabase/functions/ai-product-builder/index.ts e documentation/continuous_learning_skills.md)
 - [x] Atualização do plano da solicitação atual sem remover entradas anteriores do checklist (documentation/TASK_LIST.md e checklist.txt)
+
+- [x] Envio ao gerador somente dos parâmetros reais do ateliê necessários para estimar custos e preços (valor-hora, margem padrão, markup, desperdício e custo de tinta) (src/components/assistant/CreateAiProductPanel.tsx, src/services/aiProductBuilderService.ts e supabase/functions/ai-product-builder/index.ts)
+- [x] Atualização do esquema e das instruções do Gemini para exigir ficha completa, sugestões técnicas e dimensões recomendadas, valores financeiros e tempo estimado sem campos vazios (supabase/functions/ai-product-builder/index.ts e src/types/index.ts)
+- [x] Inclusão de valores de contingência identificados como sugestões, cálculo da mão de obra pelo valor-hora configurado, consideração do desperdício e preço mínimo coerente com custo e margem (supabase/functions/ai-product-builder/index.ts)
+- [x] Atualização da prévia para exigir campos preenchidos, permitir edição das estimativas e explicar que dados e valores sugeridos devem ser revisados (src/components/assistant/CreateAiProductPanel.tsx e src/services/aiProductBuilderService.ts)
+- [x] Inclusão de marcadores de sugestão e de seus apontamentos no Catálogo, com remoção do marcador após edição manual e preservação da origem IA (src/types/index.ts e src/components/store-products/StoreProductsPage.tsx)
+- [x] Inclusão de comando separado para republicar somente a função ai-product-builder após a atualização das estimativas (package.json)
+- [x] Verificação estática concluída com zero diagnósticos TypeScript, zero erros de sintaxe na função e confirmação de campos obrigatórios, parâmetros do ateliê e indicações de sugestão
+- [x] Registro da regra de preenchimento completo e estimativas identificadas na base técnica incremental (documentation/continuous_learning_skills.md)

@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "supabase:login": "supabase login",
-    "supabase:deploy-functions": "supabase functions deploy system-backup --project-ref zssyrupllztulugvibzh && supabase functions deploy manage-admin-users --project-ref zssyrupllztulugvibzh && supabase functions deploy ai-product-builder --project-ref zssyrupllztulugvibzh"
+    "supabase:deploy-functions": "supabase functions deploy system-backup --project-ref zssyrupllztulugvibzh && supabase functions deploy manage-admin-users --project-ref zssyrupllztulugvibzh && supabase functions deploy ai-product-builder --project-ref zssyrupllztulugvibzh",
+    "supabase:deploy-ai-product-builder": "supabase functions deploy ai-product-builder --project-ref zssyrupllztulugvibzh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.2",
