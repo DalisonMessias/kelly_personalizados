@@ -21,6 +21,7 @@ import {
 } from '../../types';
 import { storageService } from '../../services/storage';
 import { formatCurrency } from '../../utils/calculations';
+import { CreateAiProductPanel } from './CreateAiProductPanel';
 
 interface AssistantPageProps {
   products: ProductService[];
@@ -184,6 +185,7 @@ export function AssistantPage({ products, calculations, onFillCalculator }: Assi
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [orderToPrint, setOrderToPrint] = useState<ServiceOrder | null>(null);
+  const [isProductCreatorOpen, setIsProductCreatorOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -484,6 +486,10 @@ export function AssistantPage({ products, calculations, onFillCalculator }: Assi
     window.print();
   };
 
+  if (isProductCreatorOpen) {
+    return <CreateAiProductPanel onClose={() => setIsProductCreatorOpen(false)} />;
+  }
+
   return (
     <div className="h-[calc(100dvh-7.5rem)] lg:h-[calc(100vh-4.25rem)] grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4">
       <aside className="hidden lg:flex card-base flex-col overflow-hidden">
@@ -519,9 +525,14 @@ export function AssistantPage({ products, calculations, onFillCalculator }: Assi
               <p className="text-[11px] text-slate-500 truncate">Ajuda com produtos, custos e precificação</p>
             </div>
           </div>
-          <button type="button" onClick={startNewConversation} className="lg:hidden p-2.5 rounded-xl bg-brand-600 text-white" title="Nova conversa">
-            <Plus className="w-4 h-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={() => setIsProductCreatorOpen(true)} title="Criar Produto com IA" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-3 text-xs font-bold text-brand-700 transition hover:bg-pink-100">
+              <Sparkles className="h-4 w-4" /><span className="hidden sm:inline">Criar Produto com IA</span>
+            </button>
+            <button type="button" onClick={startNewConversation} className="lg:hidden p-2.5 rounded-xl bg-brand-600 text-white" title="Nova conversa">
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
         </header>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-4 py-3 sm:py-4 space-y-3">

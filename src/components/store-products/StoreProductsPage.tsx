@@ -91,6 +91,15 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
   const [editingCategory, setEditingCategory] = useState<StoreCategory | null>(null);
 
   const adminProducts = storageService.getProducts();
+  const categoryOptions = [
+    ...Object.entries(categoryLabels).map(([value, label]) => ({ value, label })),
+    ...categories.map((category) => ({ value: category.id, label: category.name })),
+  ].filter((option, index, options) => options.findIndex((item) => item.value === option.value) === index);
+  const statusOptions = [
+    { value: 'rascunho', label: 'Rascunho' },
+    { value: 'inativo', label: 'Inativo' },
+    { value: 'ativo', label: 'Ativo' },
+  ];
 
   const filtered = useMemo(() => products.filter((product) => {
     const matchesSearch = `${product.name} ${product.publicDescription} ${product.internalDescription}`.toLowerCase().includes(search.toLowerCase());
@@ -139,6 +148,8 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
       name: form.name.trim(),
       publicDescription: form.publicDescription.trim(),
       internalDescription: form.internalDescription.trim(),
+      salePriceProvided: form.salePriceProvided ?? true,
+      pricingProvided: form.pricingProvided ?? true,
       createdAt: form.createdAt || now,
       updatedAt: now,
     };
@@ -320,14 +331,8 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar produto ou descrição..." className="input-base pl-10" />
         </div>
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'todos' | StoreProductStatus)} className="input-base sm:col-span-3">
-          <option value="todos">Todos os status</option><option value="ativo">Ativo</option><option value="inativo">Inativo</option>
-        </select>
-        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="input-base sm:col-span-3">
-          <option value="todos">Todas as categorias</option>
-          {Object.entries(categoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          {categories.filter((category) => category.active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-        </select>
+        <CustomSelect value={statusFilter} onChange={(value) => setStatusFilter(value as 'todos' | StoreProductStatus)} className="sm:col-span-3" options={[{ value: 'todos', label: 'Todos os status' }, ...statusOptions]} />
+        <CustomSelect value={categoryFilter} onChange={setCategoryFilter} className="sm:col-span-3" options={[{ value: 'todos', label: 'Todas as categorias' }, ...categoryOptions]} />
       </div>
 
       {adminProducts.length > 0 && (
@@ -351,10 +356,11 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
                   <h3 className="font-black text-slate-900 truncate">{product.name}</h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2">{product.publicDescription || 'Sem descrição pública.'}</p>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${product.status === 'ativo' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{product.status}</span>
+                <div className="flex flex-wrap justify-end gap-1.5"><span className={`px-2 py-1 rounded-full text-[10px] font-bold ${product.status === 'ativo' ? 'bg-emerald-100 text-emerald-700' : product.status === 'rascunho' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{product.status === 'rascunho' ? 'Rascunho' : product.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>{product.creationOrigin === 'ia' && <span className="rounded-full bg-pink-50 px-2 py-1 text-[10px] font-bold text-brand-700">Criado por IA</span>}</div>
               </div>
+              <p className="text-[11px] font-semibold text-slate-500">{categoryOptions.find((category) => category.value === product.category)?.label || product.category}</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="p-2.5 rounded-xl bg-pink-50 border border-pink-100"><span className="text-slate-500 block">Preço</span><strong className="text-brand-700">{formatCurrency(product.salePrice)}</strong></div>
+                <div className="p-2.5 rounded-xl bg-pink-50 border border-pink-100"><span className="text-slate-500 block">Preço</span><strong className="text-brand-700">{product.salePriceProvided === false ? 'Não informado' : formatCurrency(product.salePrice)}</strong></div>
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><span className="text-slate-500 block">Loja futura</span><strong className="text-slate-700">{product.showInFutureStore ? 'Exibir' : 'Oculto'}</strong></div>
               </div>
               <div className="flex items-center justify-between pt-3 border-t border-pink-100">
@@ -390,11 +396,25 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
                 {form.imageIds.length > 0 && <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{form.imageIds.map((imageId) => { const imageUrl = getStoreProductImageUrl(form.id, imageId); return <div key={imageId} className="relative aspect-square overflow-hidden rounded-xl border border-rose-100 bg-white">{imageUrl && <img src={imageUrl} alt="Foto do produto" className="h-full w-full object-cover" />}<button type="button" onClick={() => setForm((current) => ({ ...current, imageIds: current.imageIds.filter((id) => id !== imageId) }))} className="absolute inset-x-1 bottom-1 rounded-lg bg-white/95 px-2 py-1.5 text-[10px] font-bold text-rose-700 shadow" title="Remover da galeria">Remover da galeria</button></div>; })}</div>}
               </section>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs font-bold text-slate-700">Categoria</label><select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as ProductCategory })} className="input-base mt-1"><option value="outro">Outro</option>{Object.entries(categoryLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+                <CustomSelect label="Categoria" value={form.category} onChange={(value) => setForm({ ...form, category: value })} options={categoryOptions} />
                 <div><label className="text-xs font-bold text-slate-700">Quantidade mínima</label><input type="number" min={1} value={form.minimumQuantity} onChange={(event) => setForm({ ...form, minimumQuantity: Math.max(1, Number(event.target.value)) })} className="input-base mt-1" /></div>
               </div>
+              <section className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Ficha técnica</h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div><label className="text-xs font-bold text-slate-700">Tipo de produto</label><input value={form.productType || ''} onChange={(event) => setForm({ ...form, productType: event.target.value })} className="input-base mt-1" /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Unidade de venda</label><input value={form.saleUnit || ''} onChange={(event) => setForm({ ...form, saleUnit: event.target.value })} className="input-base mt-1" /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Materiais utilizados</label><textarea value={(form.materials || []).join('\n')} onChange={(event) => setForm({ ...form, materials: event.target.value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean) })} className="input-base mt-1 resize-none" rows={3} /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Gramatura e especificações</label><textarea value={form.technicalSpecs || ''} onChange={(event) => setForm({ ...form, technicalSpecs: event.target.value })} className="input-base mt-1 resize-none" rows={3} /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Dimensões</label><input value={form.dimensions || ''} onChange={(event) => setForm({ ...form, dimensions: event.target.value })} className="input-base mt-1" /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Orientações de personalização</label><textarea value={form.personalizationInstructions || ''} onChange={(event) => setForm({ ...form, personalizationInstructions: event.target.value })} className="input-base mt-1 resize-none" rows={2} /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Palavras-chave</label><textarea value={(form.keywords || []).join(', ')} onChange={(event) => setForm({ ...form, keywords: event.target.value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean) })} className="input-base mt-1 resize-none" rows={2} /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Informações adicionais</label><textarea value={form.additionalInfo || ''} onChange={(event) => setForm({ ...form, additionalInfo: event.target.value })} className="input-base mt-1 resize-none" rows={2} /></div>
+                </div>
+                {form.creationOrigin === 'ia' && !form.pricingProvided && <p className="text-[11px] text-slate-500">A IA não informou custos ou preços suficientes. Os valores zerados ainda não estão cadastrados.</p>}
+              </section>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs font-bold text-slate-700">Preço de venda</label><CurrencyInput value={form.salePrice} onChange={(value) => setForm({ ...form, salePrice: value })} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Preço de venda</label><CurrencyInput value={form.salePrice} onChange={(value) => setForm({ ...form, salePrice: value, salePriceProvided: value > 0 ? true : form.salePriceProvided })} className="input-base mt-1" /></div>
                 <div><label className="text-xs font-bold text-slate-700">Margem</label><PercentInput value={form.marginPercent} onChange={(value) => setForm({ ...form, marginPercent: value || 0 })} className="input-base pr-10 mt-1" /></div>
               </div>
               <div><label className="text-xs font-bold text-slate-700">Prazo de produção</label><input value={form.productionDeadline} onChange={(event) => setForm({ ...form, productionDeadline: event.target.value })} className="input-base mt-1" placeholder="Ex: 3 a 5 dias úteis" /></div>
@@ -442,7 +462,7 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
             </section>
 
             <section className="pt-4 border-t border-pink-100 space-y-3">
-              <CustomSwitch label="Ativo no sistema" checked={form.status === 'ativo'} onChange={(checked) => setForm({ ...form, status: checked ? 'ativo' : 'inativo' })} />
+              <CustomSelect label="Status do produto" value={form.status} onChange={(value) => setForm({ ...form, status: value as StoreProductStatus })} options={statusOptions} />
               <CustomSwitch label="Exibir na loja virtual" checked={form.showInFutureStore} onChange={(checked) => setForm({ ...form, showInFutureStore: checked })} />
             </section>
           </div>
