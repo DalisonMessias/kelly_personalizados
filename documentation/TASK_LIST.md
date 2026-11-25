@@ -1,12 +1,10 @@
-# Plano de tarefas — Solicitação de Orçamento Personalizado
+# Plano de tarefas — Groq como alternativa no Criador de Produtos com IA
 
-[x] 1. Revisar checklist, documentação, rotas, catálogo público, pedidos, permissões administrativas e estruturas Supabase existentes.
-[x] 2. Confirmar que não existe tabela de orçamentos públicos e identificar o armazenamento privado de imagens e o pedido reutilizável para conversão.
-[x] 3. Adicionar na parte 3 do esquema global a tabela, índices, políticas e funções seguras para criar, administrar, arquivar e converter orçamentos sem apagar dados.
-[x] 4. Criar o formulário público com seleção opcional de produto, validação, referência de imagem privada, confirmação e URL amigável.
-[x] 5. Criar a seção administrativa com lista, filtros, detalhes, edição de situação e valor, observações, imagem e atalho de WhatsApp.
-[x] 6. Implementar conversão transacional e idempotente do orçamento aprovado em pedido existente, preservando histórico.
-[x] 7. Integrar rota, menus e acesso do painel; validar tipos, sintaxe, permissões e preservação dos dados.
-[x] 8. Acrescentar ao checklist e à base técnica os resultados concluídos.
+[ ] 1. Revisar o fluxo Gemini existente, as chaves na tabela api_keys e a documentação oficial da API Groq.
+[ ] 2. Adicionar ao esquema da parte 3 a configuração persistente do limite de tentativas, sem alterar ou remover dados existentes.
+[ ] 3. Estender a função ai-product-builder para consultar as chaves Gemini e Groq já guardadas em api_keys e gerar com o provedor solicitado com segurança.
+[ ] 4. Atualizar Configuração da IA com campo de chave Groq, estado de cada provedor e limite de tentativas configurável.
+[ ] 5. Implementar tentativas alternadas, espera aleatória de 5 a 10 segundos, validação da resposta e mensagens de progresso sem limpar a descrição.
+[ ] 6. Validar sintaxe e tipos dos arquivos alterados e registrar as conclusões no checklist e na base técnica.
 
-A exclusão foi implementada como arquivamento lógico para preservar solicitações e históricos. A checagem de tipos passou sem diagnósticos nos módulos alterados. A validação ponta a ponta com o Supabase depende de aplicar a migração no projeto; o navegador não estava disponível nesta sessão para inspeção visual.
+A alternância será coordenada pela tela, enquanto cada chamada ao provedor e cada chave continuam protegidas pela função Supabase existente.

@@ -1270,6 +1270,10 @@ create index if not exists api_keys_product_creator_lookup_idx
 alter table public.api_keys enable row level security;
 grant all on table public.api_keys to service_role;
 
+-- Configuração aditiva para limitar as tentativas alternadas do Criador de Produtos com IA.
+alter table public.api_keys
+  add column if not exists ai_fallback_max_attempts integer not null default 4;
+
 -- Solicitações públicas de orçamento, separadas dos pedidos já confirmados.
 create table if not exists public.kelly_storefront_quote_requests_v1 (
   id uuid primary key,

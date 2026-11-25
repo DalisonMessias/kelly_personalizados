@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, KeyRound, LoaderCircle, PackagePlus, RefreshCw, Save, ShieldCheck, Sparkles } from 'lucide-react';
 import { AiProductDraft, AiProductModel, StoreCategory, StoreProduct } from '../../types';
-import { generateAiProductDraft, getAiProductBuilderStatus, saveAiProductBuilderKey } from '../../services/aiProductBuilderService';
+import {
+  AiProductProvider,
+  generateAiProductDraft,
+  getAiProductBuilderStatus,
+  saveAiProductBuilderFallbackAttempts,
+  saveAiProductBuilderGroqKey,
+  saveAiProductBuilderKey,
+} from '../../services/aiProductBuilderService';
 import { storeRepository } from '../../services/storeRepository';
 import { flushPendingCloudData } from '../../services/appDataSync';
 import { storageService } from '../../services/storage';
@@ -66,16 +73,24 @@ function resolveCategoryId(name: string, categories: StoreCategory[]): string {
 }
 
 export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
-  const { success, warning, error } = useToast();
+  const { success, warning, error, info } = useToast();
   const [description, setDescription] = useState(SAMPLE_DESCRIPTION);
   const [draft, setDraft] = useState<AiProductDraft | null>(null);
   const [isCheckingKey, setIsCheckingKey] = useState(true);
   const [isConfigured, setIsConfigured] = useState(false);
+  const [geminiConfigured, setGeminiConfigured] = useState(false);
+  const [groqConfigured, setGroqConfigured] = useState(false);
   const [configurationError, setConfigurationError] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [groqApiKey, setGroqApiKey] = useState('');
   const [modelName, setModelName] = useState<AiProductModel>('gemini-3.1-pro');
+  const [groqModelName, setGroqModelName] = useState('openai/gpt-oss-120b');
+  const [fallbackMaxAttempts, setFallbackMaxAttempts] = useState(4);
   const [isSavingKey, setIsSavingKey] = useState(false);
+  const [isSavingGroqKey, setIsSavingGroqKey] = useState(false);
+  const [isSavingRetrySettings, setIsSavingRetrySettings] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState('');
   const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const saveProductIdRef = useRef<string | null>(null);
@@ -92,7 +107,11 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
       .then((status) => {
         if (!active) return;
         setIsConfigured(status.configured);
+        setGeminiConfigured(status.geminiConfigured);
+        setGroqConfigured(status.groqConfigured);
         setModelName(status.modelName);
+        setGroqModelName(status.groqModelName);
+        setFallbackMaxAttempts(status.fallbackMaxAttempts);
       })
       .catch((statusError) => {
         if (!active) return;
@@ -124,11 +143,15 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
     setIsSavingKey(true);
     setConfigurationError('');
     try {
-      const status = await saveAiProductBuilderKey(apiKey, modelName);
+      const status = await saveAiProductBuilderKey(apiKey, modelName, fallbackMaxAttempts);
       setIsConfigured(status.configured);
+      setGeminiConfigured(status.geminiConfigured);
+      setGroqConfigured(status.groqConfigured);
       setModelName(status.modelName);
+      setGroqModelName(status.groqModelName);
+      setFallbackMaxAttempts(status.fallbackMaxAttempts);
       setApiKey('');
-      success('Configuração Gemini salva', 'A chave foi armazenada na tabela api_keys e não será devolvida ao navegador.');
+      success('Configuração Gemini salva', 'A chave ficou protegida em api_keys e não será devolvida ao navegador.');
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : 'Não foi possível salvar a configuração Gemini.';
       setConfigurationError(message);
@@ -138,18 +161,74 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
     }
   };
 
+  const handleSaveGroqKey = async () => {
+    if (!groqApiKey.trim()) {
+      warning('Informe a chave Groq', 'A chave será enviada apenas ao Supabase e não ficará visível depois de salva.');
+      return;
+    }
+    setIsSavingGroqKey(true);
+    setConfigurationError('');
+    try {
+      const status = await saveAiProductBuilderGroqKey(groqApiKey, fallbackMaxAttempts);
+      setIsConfigured(status.configured);
+      setGeminiConfigured(status.geminiConfigured);
+      setGroqConfigured(status.groqConfigured);
+      setModelName(status.modelName);
+      setGroqModelName(status.groqModelName);
+      setFallbackMaxAttempts(status.fallbackMaxAttempts);
+      setGroqApiKey('');
+      success('Configuração Groq salva', 'A chave ficou protegida em api_keys e não será devolvida ao navegador.');
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : 'Não foi possível salvar a configuração Groq.';
+      setConfigurationError(message);
+      error('Não foi possível salvar a chave Groq', message);
+    } finally {
+      setIsSavingGroqKey(false);
+    }
+  };
+
+  const handleSaveFallbackAttempts = async () => {
+    if (!isConfigured) {
+      warning('Configure um provedor primeiro', 'Salve a chave do Gemini ou do Groq antes de ajustar as tentativas.');
+      return;
+    }
+    setIsSavingRetrySettings(true);
+    setConfigurationError('');
+    try {
+      const status = await saveAiProductBuilderFallbackAttempts(fallbackMaxAttempts);
+      setIsConfigured(status.configured);
+      setGeminiConfigured(status.geminiConfigured);
+      setGroqConfigured(status.groqConfigured);
+      setModelName(status.modelName);
+      setGroqModelName(status.groqModelName);
+      setFallbackMaxAttempts(status.fallbackMaxAttempts);
+      success('Limite de tentativas salvo', `A geração poderá fazer até ${status.fallbackMaxAttempts} tentativas alternadas.`);
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : 'Não foi possível salvar o limite de tentativas.';
+      setConfigurationError(message);
+      error('Não foi possível salvar o limite', message);
+    } finally {
+      setIsSavingRetrySettings(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!description.trim()) {
       warning('Descreva o produto', 'Escreva o que deseja criar para a IA montar o cadastro.');
       return;
     }
-    if (!isConfigured) {
-      warning('Configure a IA primeiro', 'Salve uma chave Gemini nesta tela antes de gerar o produto.');
+    const availableProviders: AiProductProvider[] = [
+      ...(geminiConfigured ? ['gemini' as const] : []),
+      ...(groqConfigured ? ['groq' as const] : []),
+    ];
+    if (!availableProviders.length) {
+      warning('Configure um provedor primeiro', 'Salve uma chave Gemini ou Groq nesta tela antes de gerar o produto.');
       return;
     }
 
     setIsGenerating(true);
     setConfigurationError('');
+    setGenerationMessage('');
     try {
       const settings = storageService.getSettings();
       const pricingContext = {
@@ -159,13 +238,44 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
         defaultMarkupPercentage: settings.defaultMarkupPercentage,
         defaultInkCostPerSheet: settings.defaultInkCostPerSheet,
       };
-      const generated = await generateAiProductDraft(description, categoryNames, pricingContext);
-      setDraft(generated);
-      saveProductIdRef.current = null;
-      success('Prévia pronta', 'Revise e edite os campos antes de salvar o produto no catálogo.');
+      const failures: string[] = [];
+      for (let attempt = 0; attempt < fallbackMaxAttempts; attempt += 1) {
+        const provider = availableProviders[attempt % availableProviders.length];
+        const providerLabel = provider === 'gemini' ? 'Gemini' : 'Groq';
+        setGenerationMessage(`Tentativa ${attempt + 1} de ${fallbackMaxAttempts}: gerando pelo ${providerLabel}...`);
+        try {
+          const generated = await generateAiProductDraft(description, categoryNames, pricingContext, provider);
+          setDraft(generated.product);
+          saveProductIdRef.current = null;
+          setGenerationMessage(`Cadastro gerado pelo ${generated.providerLabel} na tentativa ${attempt + 1} de ${fallbackMaxAttempts}.`);
+          success(`Prévia pronta pelo ${generated.providerLabel}`, 'Revise e edite os campos antes de salvar o produto no catálogo.');
+          return;
+        } catch (providerError) {
+          const message = providerError instanceof Error ? providerError.message : 'A resposta não foi válida.';
+          failures.push(`${providerLabel}: ${message}`);
+          if (attempt + 1 >= fallbackMaxAttempts) break;
+
+          const nextProvider = availableProviders[(attempt + 1) % availableProviders.length];
+          const nextProviderLabel = nextProvider === 'gemini' ? 'Gemini' : 'Groq';
+          const isProviderSwitch = nextProvider !== provider;
+          const waitSeconds = Math.floor(Math.random() * 6) + 5;
+          setGenerationMessage(isProviderSwitch
+            ? `${providerLabel} falhou. Alternando automaticamente para ${nextProviderLabel} em ${waitSeconds} segundos...`
+            : `${providerLabel} falhou. Nova tentativa pelo mesmo provedor em ${waitSeconds} segundos...`);
+          if (isProviderSwitch) info('Alternância automática de IA', `${providerLabel} não retornou uma resposta válida. A próxima tentativa será pelo ${nextProviderLabel}.`);
+          for (let remaining = waitSeconds; remaining > 0; remaining -= 1) {
+            setGenerationMessage(isProviderSwitch
+              ? `${providerLabel} falhou. Alternando para ${nextProviderLabel} em ${remaining} ${remaining === 1 ? 'segundo' : 'segundos'}...`
+              : `${providerLabel} falhou. Nova tentativa em ${remaining} ${remaining === 1 ? 'segundo' : 'segundos'}...`);
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
+          }
+        }
+      }
+      throw new Error(`Todos os provedores disponíveis falharam após ${fallbackMaxAttempts} tentativas. ${failures.join(' · ')}`);
     } catch (generationError) {
       const message = generationError instanceof Error ? generationError.message : 'Não foi possível gerar o cadastro.';
       setConfigurationError(message);
+      setGenerationMessage(`Geração interrompida após ${fallbackMaxAttempts} tentativas.`);
       error('Não foi possível gerar o produto', message);
     } finally {
       setIsGenerating(false);
@@ -173,7 +283,7 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
   };
 
   const handleSaveProduct = async () => {
-    if (!draft) return;
+    if (!draft || isGenerating) return;
     const requiredTexts = [draft.name, draft.description, draft.category, draft.productType, draft.technicalSpecs,
       draft.dimensions, draft.saleUnit, draft.additionalInfo, draft.suggestionNotes];
     const requiredNumbers = [draft.salePrice, draft.productionCost, draft.materialCost, draft.laborCost,
@@ -253,6 +363,7 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
   };
 
   const handleCancel = () => {
+    if (isGenerating || isSavingProduct) return;
     if (draft) setIsCancelModalOpen(true);
     else onClose();
   };
@@ -272,7 +383,7 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-pink-100 bg-pink-50 text-brand-600"><PackagePlus className="h-5 w-5" /></div>
             <div><h1 className="text-xl font-black text-slate-900">Criar Produto com IA</h1><p className="mt-1 text-xs text-slate-500">Descreva o produto, revise os campos e salve como rascunho no catálogo.</p></div>
           </div>
-          <button type="button" onClick={handleCancel} className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50 sm:self-auto"><ArrowLeft className="h-4 w-4" /> Voltar ao Assistente</button>
+          <button type="button" onClick={handleCancel} disabled={isGenerating || isSavingProduct} className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"><ArrowLeft className="h-4 w-4" /> Voltar ao Assistente</button>
         </header>
 
         <section className="rounded-2xl border border-pink-100 bg-pink-50/30 p-4 sm:p-5">
@@ -284,20 +395,37 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
               {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{draft ? 'Gerar novamente' : 'Gerar cadastro'}
             </button>
           </div>
+          {generationMessage && <p role="status" aria-live="polite" className={`mt-3 flex items-center gap-2 rounded-xl border p-3 text-xs ${isGenerating ? 'border-sky-100 bg-sky-50 text-sky-800' : 'border-emerald-100 bg-emerald-50 text-emerald-800'}`}>{isGenerating && <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin" />}{generationMessage}</p>}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-3"><div className="mt-0.5 rounded-xl bg-slate-100 p-2 text-slate-600"><KeyRound className="h-4 w-4" /></div><div><h2 className="text-sm font-black text-slate-800">Configuração da IA</h2><p className="mt-1 text-xs text-slate-500">A chave fica na tabela api_keys e nunca é enviada de volta ao navegador.</p></div></div>
-            {isCheckingKey ? <span className="inline-flex items-center gap-2 text-xs text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" /> Conferindo configuração...</span> : isConfigured ? <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Gemini configurado</span> : <span className="text-xs font-bold text-amber-700">Chave ainda não configurada</span>}
+            {isCheckingKey ? <span className="inline-flex items-center gap-2 text-xs text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" /> Conferindo configuração...</span> : <div className="flex flex-wrap gap-2 text-[10px] font-bold"><span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${geminiConfigured ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}><CheckCircle2 className="h-3.5 w-3.5" />Gemini {geminiConfigured ? 'configurado' : 'sem chave'}</span><span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${groqConfigured ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}><CheckCircle2 className="h-3.5 w-3.5" />Groq {groqConfigured ? 'configurado' : 'sem chave'}</span></div>}
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)] sm:items-end">
-            <div><label className="mb-1 block text-xs font-bold text-slate-700">Chave de API Gemini</label><input type="password" autoComplete="new-password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="input-base" placeholder={isConfigured ? 'Digite uma nova chave para substituir' : 'Cole a chave Gemini aqui'} /><span className="mt-1 block text-[10px] text-slate-400">Ela é transmitida por conexão segura e salva somente no banco.</span></div>
+            <div><label className="mb-1 block text-xs font-bold text-slate-700">Chave de API Gemini</label><input type="password" autoComplete="new-password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="input-base" placeholder={geminiConfigured ? 'Digite uma nova chave para substituir' : 'Cole a chave Gemini aqui'} /><span className="mt-1 block text-[10px] text-slate-400">Ela é transmitida por conexão segura e salva somente no banco.</span></div>
             <CustomSelect label="Modelo de texto" value={modelName} onChange={(value) => setModelName(value as AiProductModel)} options={MODEL_OPTIONS} />
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <span className="inline-flex items-center gap-1.5 text-[10px] text-slate-500"><ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> A chave não aparece no histórico nem na prévia.</span>
-            <button type="button" onClick={() => void handleSaveKey()} disabled={isSavingKey || !apiKey.trim()} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">{isSavingKey ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}{isConfigured ? 'Atualizar chave' : 'Salvar chave'}</button>
+            <button type="button" onClick={() => void handleSaveKey()} disabled={isSavingKey || isGenerating || !apiKey.trim()} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">{isSavingKey ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}{geminiConfigured ? 'Atualizar Gemini' : 'Salvar Gemini'}</button>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)] sm:items-end">
+            <div><label className="mb-1 block text-xs font-bold text-slate-700">Chave de API Groq</label><input type="password" autoComplete="new-password" value={groqApiKey} onChange={(event) => setGroqApiKey(event.target.value)} className="input-base" placeholder={groqConfigured ? 'Digite uma nova chave para substituir' : 'Cole a chave Groq aqui'} /><span className="mt-1 block text-[10px] text-slate-400">A chave é armazenada em api_keys e não retorna ao navegador.</span></div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5"><span className="block text-[10px] font-bold uppercase tracking-wide text-slate-500">Modelo de contingência</span><strong className="mt-1 block text-sm text-slate-800">Groq · {groqModelName}</strong></div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
+            <button type="button" onClick={() => void handleSaveGroqKey()} disabled={isSavingGroqKey || isGenerating || !groqApiKey.trim()} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">{isSavingGroqKey ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}{groqConfigured ? 'Atualizar Groq' : 'Salvar Groq'}</button>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end">
+              <CustomSelect label="Limite de tentativas" value={String(fallbackMaxAttempts)} onChange={(value) => setFallbackMaxAttempts(Number(value))} options={[2, 3, 4, 5, 6].map((value) => ({ value: String(value), label: `${value} tentativas` }))} />
+              <p className="text-[11px] leading-5 text-slate-500">Gemini é tentado primeiro quando está configurado. Entre falhas, o sistema aguarda de 5 a 10 segundos antes de alternar.</p>
+            </div>
+            <button type="button" onClick={() => void handleSaveFallbackAttempts()} disabled={isSavingRetrySettings || isGenerating || !isConfigured} className="inline-flex min-h-9 items-center justify-center gap-2 self-start rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 sm:self-auto">{isSavingRetrySettings ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Salvar limite</button>
           </div>
           {configurationError && <p role="alert" className="mt-3 rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">{configurationError}</p>}
         </section>
@@ -340,8 +468,8 @@ export function CreateAiProductPanel({ onClose }: CreateAiProductPanelProps) {
             </section>
 
             <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
-              <button type="button" onClick={handleCancel} disabled={isSavingProduct} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">Cancelar cadastro</button>
-              <button type="button" onClick={() => void handleSaveProduct()} disabled={isSavingProduct} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 text-xs font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-50">{isSavingProduct ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{isSavingProduct ? 'Salvando e sincronizando...' : 'Salvar como rascunho'}</button>
+              <button type="button" onClick={handleCancel} disabled={isSavingProduct || isGenerating} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">Cancelar cadastro</button>
+              <button type="button" onClick={() => void handleSaveProduct()} disabled={isSavingProduct || isGenerating} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 text-xs font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-50">{isSavingProduct ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{isSavingProduct ? 'Salvando e sincronizando...' : 'Salvar como rascunho'}</button>
             </div>
           </section>
         ) : (

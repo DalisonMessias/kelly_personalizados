@@ -1,8 +1,13 @@
 import { corsHeaders, FunctionError, jsonResponse, requireAdministrator } from '../_shared/admin.ts';
 
 const API_KEY_TABLE = 'api_keys';
-const API_KEY_NAME = 'gemini_product_creator_v1';
+const GEMINI_API_KEY_NAME = 'gemini_product_creator_v1';
+const GROQ_API_KEY_NAME = 'groq_product_creator_v1';
 const DEFAULT_MODEL = 'gemini-3.1-pro';
+const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_FALLBACK_MAX_ATTEMPTS = 4;
+const MIN_FALLBACK_MAX_ATTEMPTS = 2;
+const MAX_FALLBACK_MAX_ATTEMPTS = 6;
 
 const MODEL_IDS: Record<string, string> = {
   'gemini-3.1-pro': 'gemini-3.1-pro-preview',
@@ -42,6 +47,11 @@ const PRODUCT_SCHEMA = {
   ],
 };
 
+const GROQ_PRODUCT_SCHEMA = {
+  ...PRODUCT_SCHEMA,
+  additionalProperties: false,
+};
+
 function response(request: Request, body: unknown, status = 200): Response {
   const result = jsonResponse(body, status);
   const headers = new Headers(result.headers);
@@ -55,18 +65,65 @@ function selectedModel(value: unknown): string {
     : DEFAULT_MODEL;
 }
 
-async function readStoredKey(admin: Awaited<ReturnType<typeof requireAdministrator>>['admin']) {
+type AiProvider = 'gemini' | 'groq';
+
+interface StoredAiProviderKey {
+  apiKey: string;
+  modelName: string;
+  fallbackMaxAttempts: number;
+}
+
+function normalizeFallbackMaxAttempts(value: unknown): number {
+  const parsed = typeof value === 'number' ? Math.floor(value) : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_FALLBACK_MAX_ATTEMPTS;
+  return Math.min(MAX_FALLBACK_MAX_ATTEMPTS, Math.max(MIN_FALLBACK_MAX_ATTEMPTS, parsed));
+}
+
+async function readStoredKey(
+  admin: Awaited<ReturnType<typeof requireAdministrator>>['admin'],
+  provider: AiProvider,
+): Promise<StoredAiProviderKey | null> {
+  const isGemini = provider === 'gemini';
   const { data, error } = await admin.from(API_KEY_TABLE)
-    .select('api_key,model_name')
-    .eq('key_name', API_KEY_NAME)
+    .select('api_key,model_name,provider,ai_fallback_max_attempts')
+    .eq('key_name', isGemini ? GEMINI_API_KEY_NAME : GROQ_API_KEY_NAME)
+    .eq('provider', isGemini ? 'google_gemini' : 'groq')
     .eq('is_active', true)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (error) throw new FunctionError(502, 'Não foi possível carregar a configuração Gemini em api_keys. Aplique a atualização do esquema e tente novamente.');
+  if (error) throw new FunctionError(502, 'Não foi possível carregar as configurações de IA em api_keys. Aplique a atualização do esquema e tente novamente.');
   if (!data || typeof data.api_key !== 'string' || !data.api_key.trim()) return null;
-  return { apiKey: data.api_key.trim(), modelName: selectedModel(data.model_name) };
+  return {
+    apiKey: data.api_key.trim(),
+    modelName: isGemini ? selectedModel(data.model_name) : (typeof data.model_name === 'string' && data.model_name.trim() ? data.model_name.trim() : DEFAULT_GROQ_MODEL),
+    fallbackMaxAttempts: normalizeFallbackMaxAttempts(data.ai_fallback_max_attempts),
+  };
+}
+
+async function readBuilderConfiguration(admin: Awaited<ReturnType<typeof requireAdministrator>>['admin']) {
+  const [gemini, groq] = await Promise.all([
+    readStoredKey(admin, 'gemini'),
+    readStoredKey(admin, 'groq'),
+  ]);
+  return {
+    gemini,
+    groq,
+    fallbackMaxAttempts: gemini?.fallbackMaxAttempts ?? groq?.fallbackMaxAttempts ?? DEFAULT_FALLBACK_MAX_ATTEMPTS,
+  };
+}
+
+async function getBuilderStatus(admin: Awaited<ReturnType<typeof requireAdministrator>>['admin']) {
+  const configuration = await readBuilderConfiguration(admin);
+  return {
+    configured: Boolean(configuration.gemini || configuration.groq),
+    geminiConfigured: Boolean(configuration.gemini),
+    groqConfigured: Boolean(configuration.groq),
+    modelName: configuration.gemini?.modelName ?? DEFAULT_MODEL,
+    groqModelName: configuration.groq?.modelName ?? DEFAULT_GROQ_MODEL,
+    fallbackMaxAttempts: configuration.fallbackMaxAttempts,
+  };
 }
 
 function parseJsonResponse(value: string): Record<string, unknown> {
@@ -215,28 +272,83 @@ async function saveApiKey(
   }
 
   const modelName = selectedModel(body.modelName);
+  const fallbackMaxAttempts = normalizeFallbackMaxAttempts(body.fallbackMaxAttempts);
   const { data: existing, error: lookupError } = await admin.from(API_KEY_TABLE)
     .select('key_name')
-    .eq('key_name', API_KEY_NAME)
+    .eq('key_name', GEMINI_API_KEY_NAME)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (lookupError) throw new FunctionError(502, 'Não foi possível acessar a tabela api_keys. Aplique a atualização do esquema e tente novamente.');
 
   const values = {
-    key_name: API_KEY_NAME,
+    key_name: GEMINI_API_KEY_NAME,
     provider: 'google_gemini',
     api_key: apiKey,
     model_name: modelName,
+    ai_fallback_max_attempts: fallbackMaxAttempts,
     is_active: true,
     updated_at: new Date().toISOString(),
   };
   const { error } = existing
-    ? await admin.from(API_KEY_TABLE).update(values).eq('key_name', API_KEY_NAME)
+    ? await admin.from(API_KEY_TABLE).update(values).eq('key_name', GEMINI_API_KEY_NAME)
     : await admin.from(API_KEY_TABLE).insert({ ...values, created_at: values.updated_at });
   if (error) throw new FunctionError(502, 'Não foi possível salvar a chave Gemini em api_keys. Confira o esquema e tente novamente.');
 
-  return { configured: true, modelName };
+  return getBuilderStatus(admin);
+}
+
+async function saveGroqApiKey(
+  admin: Awaited<ReturnType<typeof requireAdministrator>>['admin'],
+  body: Record<string, unknown>,
+) {
+  const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+  if (apiKey.length < 20 || apiKey.length > 500) {
+    throw new FunctionError(400, 'Informe uma chave Groq válida. A chave não será exibida novamente após o salvamento.');
+  }
+
+  const { data: existing, error: lookupError } = await admin.from(API_KEY_TABLE)
+    .select('key_name')
+    .eq('key_name', GROQ_API_KEY_NAME)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) throw new FunctionError(502, 'Não foi possível acessar a tabela api_keys. Aplique a atualização do esquema e tente novamente.');
+
+  const values = {
+    key_name: GROQ_API_KEY_NAME,
+    provider: 'groq',
+    api_key: apiKey,
+    model_name: DEFAULT_GROQ_MODEL,
+    ai_fallback_max_attempts: normalizeFallbackMaxAttempts(body.fallbackMaxAttempts),
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = existing
+    ? await admin.from(API_KEY_TABLE).update(values).eq('key_name', GROQ_API_KEY_NAME)
+    : await admin.from(API_KEY_TABLE).insert({ ...values, created_at: values.updated_at });
+  if (error) throw new FunctionError(502, 'Não foi possível salvar a chave Groq em api_keys. Confira o esquema e tente novamente.');
+
+  return getBuilderStatus(admin);
+}
+
+async function saveFallbackAttempts(
+  admin: Awaited<ReturnType<typeof requireAdministrator>>['admin'],
+  body: Record<string, unknown>,
+) {
+  const rawAttempts = typeof body.fallbackMaxAttempts === 'number' ? Math.floor(body.fallbackMaxAttempts) : Number.NaN;
+  if (!Number.isInteger(rawAttempts) || rawAttempts < MIN_FALLBACK_MAX_ATTEMPTS || rawAttempts > MAX_FALLBACK_MAX_ATTEMPTS) {
+    throw new FunctionError(400, `O limite deve ficar entre ${MIN_FALLBACK_MAX_ATTEMPTS} e ${MAX_FALLBACK_MAX_ATTEMPTS} tentativas.`);
+  }
+
+  const { data, error } = await admin.from(API_KEY_TABLE)
+    .update({ ai_fallback_max_attempts: rawAttempts, updated_at: new Date().toISOString() })
+    .in('key_name', [GEMINI_API_KEY_NAME, GROQ_API_KEY_NAME])
+    .eq('is_active', true)
+    .select('key_name');
+  if (error) throw new FunctionError(502, 'Não foi possível salvar o limite de tentativas em api_keys. Confira o esquema e tente novamente.');
+  if (!data?.length) throw new FunctionError(409, 'Configure pelo menos um provedor antes de salvar o limite de tentativas.');
+  return getBuilderStatus(admin);
 }
 
 async function generateProduct(
@@ -248,55 +360,94 @@ async function generateProduct(
     throw new FunctionError(400, 'Descreva o produto com pelo menos 8 caracteres e no máximo 4.000.');
   }
 
-  const configuration = await readStoredKey(admin);
-  if (!configuration) throw new FunctionError(409, 'Configure a chave Gemini nesta ferramenta antes de gerar produtos.');
+  const providerValue = body.provider ?? 'gemini';
+  if (providerValue !== 'gemini' && providerValue !== 'groq') throw new FunctionError(400, 'O provedor de IA solicitado não é válido.');
+  const provider = providerValue as AiProvider;
+  const configuration = await readStoredKey(admin, provider);
+  const providerLabel = provider === 'gemini' ? 'Gemini' : 'Groq';
+  if (!configuration) throw new FunctionError(409, `Configure a chave ${providerLabel} nesta ferramenta antes de gerar produtos.`);
 
   const categories = Array.isArray(body.categories)
     ? body.categories.filter((item): item is string => typeof item === 'string').map((item) => item.trim().slice(0, 80)).filter(Boolean).slice(0, 40)
     : [];
   const pricingContext = normalizePricingContext(body.pricingContext);
-  const modelId = MODEL_IDS[configuration.modelName];
+  const modelId = provider === 'gemini'
+    ? MODEL_IDS[configuration.modelName]
+    : (configuration.modelName === DEFAULT_GROQ_MODEL ? configuration.modelName : DEFAULT_GROQ_MODEL);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': configuration.apiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: 'Preencha todos os campos do cadastro. Quando faltar uma informação, forneça uma recomendação prática, indique que é uma sugestão da IA e nunca a apresente como dado confirmado.' }] },
-        contents: [{ role: 'user', parts: [{ text: buildPrompt(description, categories, pricingContext) }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 2200,
-          responseMimeType: 'application/json',
-          responseJsonSchema: PRODUCT_SCHEMA,
+    const response = provider === 'gemini'
+      ? await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': configuration.apiKey,
         },
-      }),
-      signal: controller.signal,
-    });
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: 'Preencha todos os campos do cadastro. Quando faltar uma informação, forneça uma recomendação prática, indique que é uma sugestão da IA e nunca a apresente como dado confirmado.' }] },
+          contents: [{ role: 'user', parts: [{ text: buildPrompt(description, categories, pricingContext) }] }],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 2200,
+            responseMimeType: 'application/json',
+            responseJsonSchema: PRODUCT_SCHEMA,
+          },
+        }),
+        signal: controller.signal,
+      })
+      : await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${configuration.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelId,
+          messages: [
+            { role: 'system', content: 'Preencha todos os campos do cadastro. Quando faltar uma informação, forneça uma recomendação prática, indique que é uma sugestão da IA e nunca a apresente como dado confirmado.' },
+            { role: 'user', content: buildPrompt(description, categories, pricingContext) },
+          ],
+          temperature: 0.2,
+          max_completion_tokens: 2200,
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'ai_product_draft',
+              strict: true,
+              schema: GROQ_PRODUCT_SCHEMA,
+            },
+          },
+        }),
+        signal: controller.signal,
+      });
 
     const result = await response.json().catch(() => null);
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) throw new FunctionError(502, 'A chave Gemini não foi aceita. Confira a chave e tente novamente.');
-      if (response.status === 429) throw new FunctionError(429, 'O limite de uso da IA foi atingido. Aguarde e tente novamente.');
-      if (response.status === 404) throw new FunctionError(502, 'O modelo Gemini configurado não está disponível para esta chave. Escolha outro modelo nas configurações da ferramenta.');
-      throw new FunctionError(502, 'O Gemini não conseguiu gerar o cadastro agora. Tente novamente.');
+      if (response.status === 401 || response.status === 403) throw new FunctionError(502, `A chave ${providerLabel} não foi aceita. Confira a chave e tente novamente.`);
+      if (response.status === 429) throw new FunctionError(429, `O limite de uso do ${providerLabel} foi atingido.`);
+      if (response.status === 404) throw new FunctionError(502, `O modelo configurado do ${providerLabel} não está disponível para esta chave.`);
+      throw new FunctionError(502, `${providerLabel} não conseguiu gerar um cadastro válido agora.`);
     }
 
-    const text = result?.candidates?.[0]?.content?.parts
-      ?.map((part: { text?: unknown }) => typeof part.text === 'string' ? part.text : '')
-      .join('') ?? '';
-    if (!text) throw new FunctionError(502, 'O Gemini não retornou um cadastro de produto. Tente novamente.');
+    const text = provider === 'gemini'
+      ? result?.candidates?.[0]?.content?.parts
+        ?.map((part: { text?: unknown }) => typeof part.text === 'string' ? part.text : '')
+        .join('') ?? ''
+      : result?.choices?.[0]?.message?.content;
+    if (typeof text !== 'string' || !text.trim()) throw new FunctionError(502, `${providerLabel} não retornou um cadastro de produto válido.`);
 
-    return normalizeProduct(parseJsonResponse(text), description, categories, pricingContext);
+    return {
+      product: normalizeProduct(parseJsonResponse(text), description, categories, pricingContext),
+      provider,
+      providerLabel,
+      modelName: configuration.modelName,
+    };
   } catch (error) {
     if (error instanceof FunctionError) throw error;
     if (error instanceof Error && error.name === 'AbortError') throw new FunctionError(504, 'A geração excedeu o tempo de resposta. Tente novamente.');
-    throw new FunctionError(502, 'Não foi possível conectar ao Gemini. Verifique a conexão e tente novamente.');
+    throw new FunctionError(502, `Não foi possível conectar ao ${providerLabel}. Verifique a conexão e tente novamente.`);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -316,11 +467,16 @@ Deno.serve(async (request) => {
     }
 
     if (body.action === 'status') {
-      const configuration = await readStoredKey(admin);
-      return response(request, { configured: Boolean(configuration), modelName: configuration?.modelName ?? DEFAULT_MODEL });
+      return response(request, await getBuilderStatus(admin));
     }
     if (body.action === 'save_key') {
       return response(request, await saveApiKey(admin, body));
+    }
+    if (body.action === 'save_groq_key') {
+      return response(request, await saveGroqApiKey(admin, body));
+    }
+    if (body.action === 'save_fallback_attempts') {
+      return response(request, await saveFallbackAttempts(admin, body));
     }
     if (body.action === 'generate') {
       return response(request, { product: await generateProduct(admin, body) });

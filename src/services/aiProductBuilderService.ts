@@ -10,7 +10,20 @@ export type AiProductPricingContext = Pick<AppSettings,
 
 export interface AiProductBuilderStatus {
   configured: boolean;
+  geminiConfigured: boolean;
+  groqConfigured: boolean;
   modelName: AiProductModel;
+  groqModelName: string;
+  fallbackMaxAttempts: number;
+}
+
+export type AiProductProvider = 'gemini' | 'groq';
+
+export interface GeneratedAiProductDraft {
+  product: AiProductDraft;
+  provider: AiProductProvider;
+  providerLabel: string;
+  modelName: string;
 }
 
 async function invokeBuilder<T>(body: Record<string, unknown>): Promise<T> {
@@ -22,19 +35,36 @@ async function invokeBuilder<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 export async function getAiProductBuilderStatus(): Promise<AiProductBuilderStatus> {
-  return invokeBuilder<AiProductBuilderStatus>({ action: 'status' });
+  const status = await invokeBuilder<Partial<AiProductBuilderStatus> & { configured?: boolean }>({ action: 'status' });
+  return {
+    configured: Boolean(status.configured ?? status.geminiConfigured ?? status.groqConfigured),
+    geminiConfigured: Boolean(status.geminiConfigured ?? status.configured),
+    groqConfigured: Boolean(status.groqConfigured),
+    modelName: status.modelName ?? 'gemini-3.1-pro',
+    groqModelName: status.groqModelName ?? 'openai/gpt-oss-120b',
+    fallbackMaxAttempts: status.fallbackMaxAttempts ?? 4,
+  };
 }
 
-export async function saveAiProductBuilderKey(apiKey: string, modelName: AiProductModel): Promise<AiProductBuilderStatus> {
-  return invokeBuilder<AiProductBuilderStatus>({ action: 'save_key', apiKey, modelName });
+export async function saveAiProductBuilderKey(apiKey: string, modelName: AiProductModel, fallbackMaxAttempts: number): Promise<AiProductBuilderStatus> {
+  return invokeBuilder<AiProductBuilderStatus>({ action: 'save_key', apiKey, modelName, fallbackMaxAttempts });
+}
+
+export async function saveAiProductBuilderGroqKey(apiKey: string, fallbackMaxAttempts: number): Promise<AiProductBuilderStatus> {
+  return invokeBuilder<AiProductBuilderStatus>({ action: 'save_groq_key', apiKey, fallbackMaxAttempts });
+}
+
+export async function saveAiProductBuilderFallbackAttempts(fallbackMaxAttempts: number): Promise<AiProductBuilderStatus> {
+  return invokeBuilder<AiProductBuilderStatus>({ action: 'save_fallback_attempts', fallbackMaxAttempts });
 }
 
 export async function generateAiProductDraft(
   description: string,
   categories: string[],
   pricingContext: AiProductPricingContext,
-): Promise<AiProductDraft> {
-  const result = await invokeBuilder<{ product: AiProductDraft }>({ action: 'generate', description, categories, pricingContext });
+  provider: AiProductProvider = 'gemini',
+): Promise<GeneratedAiProductDraft> {
+  const result = await invokeBuilder<GeneratedAiProductDraft>({ action: 'generate', description, categories, pricingContext, provider });
   const product = result.product;
   const requiredTexts = product && [product.name, product.description, product.category, product.productType,
     product.technicalSpecs, product.dimensions, product.saleUnit, product.additionalInfo, product.suggestionNotes];
@@ -47,5 +77,5 @@ export async function generateAiProductDraft(
     !Array.isArray(product.aiSuggestedFields)) {
     throw new Error('A função de IA publicada está desatualizada ou retornou campos incompletos. Publique a versão mais recente e gere novamente.');
   }
-  return product;
+  return result;
 }
