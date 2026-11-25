@@ -388,6 +388,7 @@ export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: Setti
       setSaveState('salvo');
       setHasRemoteConflict(false);
       remoteConflictRef.current = false;
+      setSettingsLoadError(false);
       onRefreshAllData();
     } catch (restoreError) {
       error('Falha na restauração', restoreError instanceof Error ? restoreError.message : 'Confira a cópia e tente novamente.');
@@ -567,7 +568,7 @@ export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: Setti
             {hasUnsavedSettings && <button type="button" onClick={() => setIsDiscardModalOpen(true)} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 hover:bg-slate-50">Descartar alterações</button>}
             <button type="submit" disabled={!hasUnsavedSettings} className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-brand-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-brand-500/20 transition-all hover:bg-brand-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">
               <Save className={`h-4 w-4 ${saveState === 'salvando' ? 'animate-pulse' : ''}`} />
-              <span>{saveState === 'salvando' ? 'Salvando...' : saveState === 'salvo' ? 'Parâmetros salvos' : 'Salvar Parâmetros'}</span>
+              <span>{saveState === 'salvando' ? 'Salvando...' : hasUnsavedSettings ? 'Salvar Parâmetros' : 'Parâmetros salvos'}</span>
             </button>
           </div>
         </div>
