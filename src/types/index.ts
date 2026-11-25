@@ -322,6 +322,7 @@ export interface StoreProduct {
   additionalInfo?: string;
   creationOrigin?: 'manual' | 'ia';
   pricingProvided?: boolean;
+  salePriceProvided?: boolean;
   imageIds: string[];
   linkedServiceId?: string;
   linkedCalculationId?: string;
