@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, ImagePlus, LoaderCircle, Search, ShoppingBag, Sparkles, Tag } from 'lucide-react';
 import { CustomModal } from '../ui/CustomModal';
+import { CustomNumberInput } from '../ui/CustomNumberInput';
 import { useToast } from '../ui/Toast';
 import {
   createStorefrontRequestId,
@@ -368,7 +369,18 @@ function OrderRequestForm({ product, onBack, onSubmitted, onError }: {
             <div><label htmlFor="order-name" className="mb-1.5 block text-xs font-bold text-slate-700">Nome completo *</label><input id="order-name" autoComplete="name" maxLength={120} value={customerName} onChange={(event) => setCustomerName(event.target.value)} className="input-base" placeholder="Como podemos chamar você?" /></div>
             <div><label htmlFor="order-whatsapp" className="mb-1.5 block text-xs font-bold text-slate-700">WhatsApp com DDD *</label><input id="order-whatsapp" inputMode="tel" autoComplete="tel" maxLength={20} value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} className="input-base" placeholder="(11) 99999-9999" /></div>
           </div>
-          <div><label htmlFor="order-quantity" className="mb-1.5 block text-xs font-bold text-slate-700">Quantidade *</label><input id="order-quantity" type="number" min={product.minimumQuantity} max={9999} value={quantity} onChange={(event) => setQuantity(Math.max(product.minimumQuantity, Number(event.target.value) || product.minimumQuantity))} className="input-base max-w-xs" /><p className="mt-1.5 text-xs text-slate-400">Quantidade mínima: {product.minimumQuantity} unidades.</p></div>
+          <div className="max-w-xs">
+            <label htmlFor="order-quantity" className="mb-1.5 block text-xs font-bold text-slate-700">Quantidade *</label>
+            <CustomNumberInput
+              value={Number(quantity) || product.minimumQuantity}
+              onChange={(val) => setQuantity(Math.max(product.minimumQuantity, val))}
+              min={product.minimumQuantity}
+              max={9999}
+              step={1}
+              ariaLabel="Quantidade"
+            />
+            <p className="mt-1.5 text-xs text-slate-400">Quantidade mínima: {product.minimumQuantity} unidades.</p>
+          </div>
 
           {product.personalizationOptions.length > 0 && <section className="space-y-4 rounded-2xl bg-rose-50/60 p-4 sm:p-5"><div><h2 className="text-sm font-extrabold">Personalizações</h2><p className="mt-1 text-xs text-slate-500">Os campos com * são obrigatórios.</p></div>{product.personalizationOptions.map((option) => <PersonalizationInput key={option.id} option={option} value={answers[option.id]} onChange={(value) => updateAnswer(option.id, value)} />)}</section>}
 

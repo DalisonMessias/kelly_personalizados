@@ -12,6 +12,7 @@ export interface AiProductBuilderStatus {
   configured: boolean;
   geminiConfigured: boolean;
   groqConfigured: boolean;
+  primaryProvider: AiProductProvider;
   modelName: AiProductModel;
   groqModelName: string;
   fallbackMaxAttempts: number;
@@ -40,18 +41,44 @@ export async function getAiProductBuilderStatus(): Promise<AiProductBuilderStatu
     configured: Boolean(status.configured ?? status.geminiConfigured ?? status.groqConfigured),
     geminiConfigured: Boolean(status.geminiConfigured ?? status.configured),
     groqConfigured: Boolean(status.groqConfigured),
+    primaryProvider: status.primaryProvider ?? 'gemini',
     modelName: status.modelName ?? 'gemini-3.1-pro',
-    groqModelName: status.groqModelName ?? 'openai/gpt-oss-120b',
+    groqModelName: status.groqModelName ?? 'llama-3.3-70b-versatile',
     fallbackMaxAttempts: status.fallbackMaxAttempts ?? 4,
   };
 }
 
-export async function saveAiProductBuilderKey(apiKey: string, modelName: AiProductModel, fallbackMaxAttempts: number): Promise<AiProductBuilderStatus> {
-  return invokeBuilder<AiProductBuilderStatus>({ action: 'save_key', apiKey, modelName, fallbackMaxAttempts });
+export async function saveAiProductBuilderKey(
+  apiKey: string,
+  modelName: AiProductModel,
+  fallbackMaxAttempts: number,
+  primaryProvider: AiProductProvider = 'gemini',
+): Promise<AiProductBuilderStatus> {
+  return invokeBuilder<AiProductBuilderStatus>({ action: 'save_key', apiKey, modelName, fallbackMaxAttempts, primaryProvider });
 }
 
-export async function saveAiProductBuilderGroqKey(apiKey: string, fallbackMaxAttempts: number): Promise<AiProductBuilderStatus> {
-  return invokeBuilder<AiProductBuilderStatus>({ action: 'save_groq_key', apiKey, fallbackMaxAttempts });
+export async function saveAiProductBuilderGroqKey(
+  apiKey: string,
+  modelName: string,
+  fallbackMaxAttempts: number,
+  primaryProvider: AiProductProvider = 'gemini',
+): Promise<AiProductBuilderStatus> {
+  return invokeBuilder<AiProductBuilderStatus>({ action: 'save_groq_key', apiKey, modelName, fallbackMaxAttempts, primaryProvider });
+}
+
+export async function saveAiProductBuilderPreferences(
+  fallbackMaxAttempts: number,
+  primaryProvider: AiProductProvider,
+  modelName?: AiProductModel,
+  groqModelName?: string,
+): Promise<AiProductBuilderStatus> {
+  return invokeBuilder<AiProductBuilderStatus>({
+    action: 'save_ai_preferences',
+    fallbackMaxAttempts,
+    primaryProvider,
+    modelName,
+    groqModelName,
+  });
 }
 
 export async function saveAiProductBuilderFallbackAttempts(fallbackMaxAttempts: number): Promise<AiProductBuilderStatus> {

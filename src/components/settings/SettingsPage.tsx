@@ -14,9 +14,14 @@ import {
   Clock,
   Printer,
   Info,
-  Trash2
+  Trash2,
+  Sparkles,
+  KeyRound,
+  CheckCircle2,
+  LoaderCircle,
+  Cpu
 } from 'lucide-react';
-import { AppSettings } from '../../types';
+import { AppSettings, AiProductModel } from '../../types';
 import { storageService, DEFAULT_SETTINGS } from '../../services/storage';
 import {
   applyCloudDataValueLocally,
@@ -29,9 +34,17 @@ import {
   useDataSyncStatus,
 } from '../../services/appDataSync';
 import { CustomModal } from '../ui/CustomModal';
+import { CustomSelect } from '../ui/CustomSelect';
 import { useToast } from '../ui/Toast';
 import { CurrencyInput } from '../ui/CurrencyInput';
 import { PercentInput } from '../ui/PercentInput';
+import {
+  AiProductProvider,
+  getAiProductBuilderStatus,
+  saveAiProductBuilderGroqKey,
+  saveAiProductBuilderKey,
+  saveAiProductBuilderPreferences,
+} from '../../services/aiProductBuilderService';
 import {
   archiveSystemBackup,
   createSystemBackup,
@@ -61,6 +74,25 @@ function compareSnapshots(left: CloudDataSnapshot, right: CloudDataSnapshot): nu
   return dateDifference || left.id.localeCompare(right.id);
 }
 
+const GEMINI_MODEL_OPTIONS: Array<{ value: AiProductModel; label: string; hint: string }> = [
+  { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', hint: 'Mais detalhado' },
+  { value: 'gemini-3.0-flash', label: 'Gemini 3.0 Flash', hint: 'Mais rápido' },
+  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', hint: 'Raciocínio avançado' },
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', hint: 'Ágil' },
+];
+
+const GROQ_MODEL_OPTIONS = [
+  { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B Versatile', hint: 'Alta capacidade e precisão' },
+  { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant', hint: 'Ultra rápido e ágil' },
+  { value: 'openai/gpt-oss-120b', label: 'GPT OSS 120B', hint: 'Excelente raciocínio e síntese' },
+  { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B (MoE)', hint: 'Contexto amplo de 32k' },
+];
+
+const PRIMARY_PROVIDER_OPTIONS = [
+  { value: 'gemini', label: 'Google Gemini (Recomendado)', hint: 'Tentado primeiro em todas as gerações' },
+  { value: 'groq', label: 'Groq Cloud (Contingência/Principal)', hint: 'Tentado primeiro em todas as gerações' },
+];
+
 export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: SettingsPageProps) {
   const { success, error, warning } = useToast();
   const dataSync = useDataSyncStatus();
@@ -77,6 +109,21 @@ export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: Setti
   const [backupHistoryLoading, setBackupHistoryLoading] = useState(true);
   const [backupBusy, setBackupBusy] = useState(false);
   const [pendingBackupArchiveId, setPendingBackupArchiveId] = useState<string | null>(null);
+
+  // Estados da Configuração dos Provedores de IA
+  const [aiIsChecking, setAiIsChecking] = useState(true);
+  const [geminiConfigured, setGeminiConfigured] = useState(false);
+  const [groqConfigured, setGroqConfigured] = useState(false);
+  const [primaryProvider, setPrimaryProvider] = useState<AiProductProvider>('gemini');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [groqApiKey, setGroqApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState<AiProductModel>('gemini-3.1-pro');
+  const [groqModel, setGroqModel] = useState('llama-3.3-70b-versatile');
+  const [fallbackAttempts, setFallbackAttempts] = useState(4);
+  const [isSavingGeminiKey, setIsSavingGeminiKey] = useState(false);
+  const [isSavingGroqKey, setIsSavingGroqKey] = useState(false);
+  const [isSavingAiPrefs, setIsSavingAiPrefs] = useState(false);
+  const [aiErrorMessage, setAiErrorMessage] = useState('');
 
   // Modais de confirmação
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -96,6 +143,101 @@ export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: Setti
   useEffect(() => {
     onRefreshAllDataRef.current = onRefreshAllData;
   }, [onRefreshAllData]);
+
+  const loadAiStatus = useCallback(async () => {
+    try {
+      setAiIsChecking(true);
+      const status = await getAiProductBuilderStatus();
+      setGeminiConfigured(status.geminiConfigured);
+      setGroqConfigured(status.groqConfigured);
+      setPrimaryProvider(status.primaryProvider ?? 'gemini');
+      setGeminiModel(status.modelName);
+      setGroqModel(status.groqModelName);
+      setFallbackAttempts(status.fallbackMaxAttempts);
+      setAiErrorMessage('');
+    } catch (err) {
+      setAiErrorMessage(err instanceof Error ? err.message : 'Não foi possível carregar os provedores de IA.');
+    } finally {
+      setAiIsChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAiStatus();
+  }, [loadAiStatus]);
+
+  const handleSaveGeminiKey = async () => {
+    if (!geminiApiKey.trim()) {
+      warning('Informe a chave Gemini', 'A chave será salva no banco protegido api_keys.');
+      return;
+    }
+    setIsSavingGeminiKey(true);
+    setAiErrorMessage('');
+    try {
+      const status = await saveAiProductBuilderKey(geminiApiKey, geminiModel, fallbackAttempts, primaryProvider);
+      setGeminiConfigured(status.geminiConfigured);
+      setGroqConfigured(status.groqConfigured);
+      setPrimaryProvider(status.primaryProvider ?? primaryProvider);
+      setGeminiModel(status.modelName);
+      setGroqModel(status.groqModelName);
+      setFallbackAttempts(status.fallbackMaxAttempts);
+      setGeminiApiKey('');
+      success('Configuração Gemini salva', 'A chave do Gemini foi salva com segurança em api_keys.');
+    } catch (saveErr) {
+      const msg = saveErr instanceof Error ? saveErr.message : 'Falha ao salvar a chave Gemini.';
+      setAiErrorMessage(msg);
+      error('Não foi possível salvar', msg);
+    } finally {
+      setIsSavingGeminiKey(false);
+    }
+  };
+
+  const handleSaveGroqKey = async () => {
+    if (!groqApiKey.trim()) {
+      warning('Informe a chave Groq', 'A chave será salva no banco protegido api_keys.');
+      return;
+    }
+    setIsSavingGroqKey(true);
+    setAiErrorMessage('');
+    try {
+      const status = await saveAiProductBuilderGroqKey(groqApiKey, groqModel, fallbackAttempts, primaryProvider);
+      setGeminiConfigured(status.geminiConfigured);
+      setGroqConfigured(status.groqConfigured);
+      setPrimaryProvider(status.primaryProvider ?? primaryProvider);
+      setGeminiModel(status.modelName);
+      setGroqModel(status.groqModelName);
+      setFallbackAttempts(status.fallbackMaxAttempts);
+      setGroqApiKey('');
+      success('Configuração Groq salva', 'A chave do Groq foi salva com segurança em api_keys.');
+    } catch (saveErr) {
+      const msg = saveErr instanceof Error ? saveErr.message : 'Falha ao salvar a chave Groq.';
+      setAiErrorMessage(msg);
+      error('Não foi possível salvar', msg);
+    } finally {
+      setIsSavingGroqKey(false);
+    }
+  };
+
+  const handleSaveAiPreferences = async () => {
+    setIsSavingAiPrefs(true);
+    setAiErrorMessage('');
+    try {
+      const status = await saveAiProductBuilderPreferences(fallbackAttempts, primaryProvider, geminiModel, groqModel);
+      setGeminiConfigured(status.geminiConfigured);
+      setGroqConfigured(status.groqConfigured);
+      setPrimaryProvider(status.primaryProvider ?? primaryProvider);
+      setGeminiModel(status.modelName);
+      setGroqModel(status.groqModelName);
+      setFallbackAttempts(status.fallbackMaxAttempts);
+      success('Preferências de IA salvas', `Provedor principal definido como ${primaryProvider === 'gemini' ? 'Gemini' : 'Groq'} com até ${fallbackAttempts} tentativas.`);
+    } catch (saveErr) {
+      const msg = saveErr instanceof Error ? saveErr.message : 'Falha ao salvar as preferências de IA.';
+      setAiErrorMessage(msg);
+      error('Não foi possível salvar preferências', msg);
+    } finally {
+      setIsSavingAiPrefs(false);
+    }
+  };
 
   const hasLocalSettingsChanges = JSON.stringify(settings) !== JSON.stringify(savedSettings);
   const hasPendingSettings = hasPendingCloudData(SETTINGS_DATA_KEY);
@@ -581,6 +723,165 @@ export function SettingsPage({ onRefreshAllData, onUnsavedChangesChange }: Setti
             : backupHistory.length === 0 ? <p className="py-5 text-center text-xs text-slate-500">Ainda não há cópias salvas no histórico.</p>
               : <div className="divide-y divide-slate-100">{backupHistory.map((backup) => <div key={backup.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"><span><strong className="block text-xs text-slate-800">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(backup.createdAt))}</strong><small className="text-[10px] text-slate-400">Integridade SHA-256: {backup.checksum.slice(0, 16)}…</small></span><div className="flex flex-wrap items-center gap-2 self-start sm:self-auto"><button type="button" disabled={backupBusy} onClick={() => void prepareHistoryRestore(backup.id)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-brand-200 px-3 text-xs font-bold text-brand-700 transition hover:bg-brand-50 disabled:opacity-50"><UploadCloud className="h-3.5 w-3.5" /> Restaurar cópia</button><button type="button" disabled={backupBusy} onClick={() => void handleDownloadHistoryBackup(backup.id)} title="Baixar cópia" className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"><Download className="h-3.5 w-3.5" /> Baixar</button><button type="button" disabled={backupBusy} onClick={() => setPendingBackupArchiveId(backup.id)} title="Retirar cópia do histórico" className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-rose-200 px-3 text-xs font-bold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> Excluir</button></div></div>)}</div>}
         </div>
+      </div>
+
+      {/* Seção: Configurações dos Provedores de IA */}
+      <div className="card-base p-6 sm:p-8 space-y-6 border border-pink-100 bg-white">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="p-3 rounded-2xl bg-pink-50 text-brand-600 flex-shrink-0">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-extrabold text-slate-900">Configurações dos Provedores de IA</h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Gerencie as chaves protegidas, seleção de modelos e alternância de contingência para a criação com IA. As chaves são gravadas em <code>api_keys</code> e nunca retornam ao navegador.
+              </p>
+            </div>
+          </div>
+          {aiIsChecking ? (
+            <span className="inline-flex items-center gap-2 text-xs text-slate-500">
+              <LoaderCircle className="h-4 w-4 animate-spin" /> Carregando status da IA...
+            </span>
+          ) : (
+            <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${geminiConfigured ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Gemini {geminiConfigured ? 'configurado' : 'sem chave'}
+              </span>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${groqConfigured ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Groq {groqConfigured ? 'configurado' : 'sem chave'}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Provedor Principal e Limite de Tentativas */}
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 sm:p-5 space-y-4">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <Cpu className="w-4 h-4 text-brand-600" />
+            <span>Fluxo de Execução & Contingência</span>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 items-start">
+            <CustomSelect
+              label="Provedor Principal"
+              value={primaryProvider}
+              onChange={(val) => setPrimaryProvider(val as AiProductProvider)}
+              options={PRIMARY_PROVIDER_OPTIONS}
+            />
+            <CustomSelect
+              label="Limite de Tentativas Alternadas"
+              value={String(fallbackAttempts)}
+              onChange={(val) => setFallbackAttempts(Number(val))}
+              options={[2, 3, 4, 5, 6].map((num) => ({ value: String(num), label: `${num} tentativas alternadas` }))}
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <p className="text-[11px] leading-5 text-slate-500">
+              Se o provedor principal falhar ou atingir cota, o sistema alterna automaticamente para o outro provedor com espera randômica de 5 a 10s.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleSaveAiPreferences()}
+              disabled={isSavingAiPrefs || (!geminiConfigured && !groqConfigured)}
+              className="inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 hover:bg-brand-700 text-white px-5 text-xs font-bold transition shadow-sm disabled:opacity-50 shrink-0"
+            >
+              {isSavingAiPrefs ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              <span>Salvar Preferências</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Integração Google Gemini */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-brand-600" />
+              <h4 className="text-sm font-bold text-slate-800">Google Gemini</h4>
+            </div>
+            <span className="text-[11px] text-slate-400">Modelos multimodais e raciocínio avançado</span>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)] sm:items-start">
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-700">Chave de API Gemini</label>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={geminiApiKey}
+                onChange={(e) => setGeminiApiKey(e.target.value)}
+                className="input-base"
+                placeholder={geminiConfigured ? 'Digite uma nova chave para substituir' : 'Cole a chave Gemini aqui'}
+              />
+              <span className="mt-1 block text-[10px] text-slate-400">Transmitida com criptografia e mantida segura em api_keys.</span>
+            </div>
+            <CustomSelect
+              label="Modelo Gemini"
+              value={geminiModel}
+              onChange={(val) => setGeminiModel(val as AiProductModel)}
+              options={GEMINI_MODEL_OPTIONS}
+            />
+          </div>
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => void handleSaveGeminiKey()}
+              disabled={isSavingGeminiKey || !geminiApiKey.trim()}
+              className="inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
+            >
+              {isSavingGeminiKey ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              <span>{geminiConfigured ? 'Atualizar Chave Gemini' : 'Salvar Chave Gemini'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Integração Groq Cloud */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-purple-600" />
+              <h4 className="text-sm font-bold text-slate-800">Groq Cloud (LPU de Ultra Baixa Latência)</h4>
+            </div>
+            <span className="text-[11px] text-slate-400">Contingência e velocidade instantânea</span>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)] sm:items-start">
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-700">Chave de API Groq</label>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={groqApiKey}
+                onChange={(e) => setGroqApiKey(e.target.value)}
+                className="input-base"
+                placeholder={groqConfigured ? 'Digite uma nova chave para substituir' : 'Cole a chave Groq aqui'}
+              />
+              <span className="mt-1 block text-[10px] text-slate-400">Armazenada na tabela api_keys para alternância transparente.</span>
+            </div>
+            <CustomSelect
+              label="Modelo Groq"
+              value={groqModel}
+              onChange={(val) => setGroqModel(val)}
+              options={GROQ_MODEL_OPTIONS}
+            />
+          </div>
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => void handleSaveGroqKey()}
+              disabled={isSavingGroqKey || !groqApiKey.trim()}
+              className="inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
+            >
+              {isSavingGroqKey ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              <span>{groqConfigured ? 'Atualizar Chave Groq' : 'Salvar Chave Groq'}</span>
+            </button>
+          </div>
+        </div>
+
+        {aiErrorMessage && (
+          <p role="alert" className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">
+            {aiErrorMessage}
+          </p>
+        )}
       </div>
 
       {/* Seção 2: Parâmetros Padrão do Ateliê com Dados Reais de Mercado */}

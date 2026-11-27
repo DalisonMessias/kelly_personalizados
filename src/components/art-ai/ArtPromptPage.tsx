@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sparkles, WandSparkles, RefreshCw, Copy, Edit3, ExternalLink, Printer } from 'lucide-react';
 import { CustomSwitch } from '../ui/CustomSwitch';
+import { CustomSelect } from '../ui/CustomSelect';
 import { GeneratedArtPrompt } from '../../types';
 
 export function ArtPromptPage() {
@@ -134,7 +135,19 @@ export function ArtPromptPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div><label className="text-xs font-bold text-slate-700">Formato</label><select value={format} onChange={(event) => setFormat(event.target.value)} className="input-base mt-1"><option value="">Não informado</option><option value="redondo">Redondo</option><option value="quadrado">Quadrado</option><option value="retangular">Retangular</option><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></div>
+            <CustomSelect
+              label="Formato"
+              value={format}
+              onChange={setFormat}
+              options={[
+                { value: '', label: 'Não informado' },
+                { value: 'redondo', label: 'Redondo' },
+                { value: 'quadrado', label: 'Quadrado' },
+                { value: 'retangular', label: 'Retangular' },
+                { value: 'vertical', label: 'Vertical' },
+                { value: 'horizontal', label: 'Horizontal' },
+              ]}
+            />
             <div><label className="text-xs font-bold text-slate-700">Tamanho ou dimensões</label><input value={dimensions} onChange={(event) => setDimensions(event.target.value)} className="input-base mt-1" placeholder="Ex: 15 cm ou folha A4" /></div>
           </div>
 
@@ -146,10 +159,29 @@ export function ArtPromptPage() {
           <div className="p-4 rounded-2xl border border-pink-100 bg-pink-50/40 space-y-3">
             <CustomSwitch label="Preparar arte para impressão A4" description="Gera instruções para folha A4 pronta para recorte." checked={prepareA4} onChange={setPrepareA4} />
             {prepareA4 && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <select value={a4Orientation} onChange={(event) => setA4Orientation(event.target.value as 'vertical' | 'horizontal')} className="input-base"><option value="vertical">A4 vertical</option><option value="horizontal">A4 horizontal</option></select>
-                <select value={a4Background} onChange={(event) => setA4Background(event.target.value as 'branco' | 'transparente')} className="input-base"><option value="branco">Fundo branco</option><option value="transparente">Fundo transparente</option></select>
-                <div className="space-y-2"><label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={cutOutline} onChange={(event) => setCutOutline(event.target.checked)} className="accent-brand-600" />Contorno de recorte</label><label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={multipleUnits} onChange={(event) => setMultipleUnits(event.target.checked)} className="accent-brand-600" />Várias unidades</label></div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <CustomSelect
+                  label="Orientação A4"
+                  value={a4Orientation}
+                  onChange={(val) => setA4Orientation(val as 'vertical' | 'horizontal')}
+                  options={[
+                    { value: 'vertical', label: 'A4 vertical' },
+                    { value: 'horizontal', label: 'A4 horizontal' },
+                  ]}
+                />
+                <CustomSelect
+                  label="Fundo da folha"
+                  value={a4Background}
+                  onChange={(val) => setA4Background(val as 'branco' | 'transparente')}
+                  options={[
+                    { value: 'branco', label: 'Fundo branco' },
+                    { value: 'transparente', label: 'Fundo transparente' },
+                  ]}
+                />
+                <div className="space-y-2 pb-1">
+                  <CustomSwitch checked={cutOutline} onChange={setCutOutline} label="Contorno de recorte" />
+                  <CustomSwitch checked={multipleUnits} onChange={setMultipleUnits} label="Várias unidades" />
+                </div>
               </div>
             )}
           </div>

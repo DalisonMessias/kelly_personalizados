@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Printer, AlertTriangle, RotateCw, Download } from 'lucide-react';
 import { CustomModal } from '../ui/CustomModal';
+import { CustomSelect } from '../ui/CustomSelect';
+import { CustomNumberInput } from '../ui/CustomNumberInput';
+import { CustomSwitch } from '../ui/CustomSwitch';
 
 interface A4PrintPreparationModalProps {
   isOpen: boolean;
@@ -97,36 +100,49 @@ export function A4PrintPreparationModal({ isOpen, onClose, imageUrl, fileName = 
     <CustomModal isOpen={isOpen} onClose={onClose} title="Preparar para impressão A4" cancelText="Fechar" showCancelButton>
       <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-4">
         <div className="space-y-3">
-          <div>
-            <label className="text-xs font-bold text-slate-700">Orientação</label>
-            <select value={orientation} onChange={(event) => setOrientation(event.target.value as 'portrait' | 'landscape')} className="input-base mt-1">
-              <option value="portrait">A4 vertical</option>
-              <option value="landscape">A4 horizontal</option>
-            </select>
-          </div>
+          <CustomSelect
+            label="Orientação"
+            value={orientation}
+            onChange={(val) => setOrientation(val as 'portrait' | 'landscape')}
+            options={[
+              { value: 'portrait', label: 'A4 vertical' },
+              { value: 'landscape', label: 'A4 horizontal' },
+            ]}
+          />
           <div>
             <label className="text-xs font-bold text-slate-700">Margem (mm)</label>
-            <input type="number" min={0} max={25} value={margin} onChange={(event) => setMargin(Math.max(0, Math.min(25, Number(event.target.value))))} className="input-base mt-1" />
+            <CustomNumberInput value={margin} onChange={setMargin} min={0} max={25} step={1} unit="mm" className="mt-1" />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div><label className="text-xs font-bold text-slate-700">Colunas</label><input type="number" min={1} max={6} value={columns} onChange={(event) => setColumns(Math.max(1, Math.min(6, Number(event.target.value))))} className="input-base mt-1" /></div>
-            <div><label className="text-xs font-bold text-slate-700">Linhas</label><input type="number" min={1} max={6} value={rows} onChange={(event) => setRows(Math.max(1, Math.min(6, Number(event.target.value))))} className="input-base mt-1" /></div>
+            <div>
+              <label className="text-xs font-bold text-slate-700">Colunas</label>
+              <CustomNumberInput value={columns} onChange={setColumns} min={1} max={6} step={1} className="mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700">Linhas</label>
+              <CustomNumberInput value={rows} onChange={setRows} min={1} max={6} step={1} className="mt-1" />
+            </div>
           </div>
           <div>
             <label className="text-xs font-bold text-slate-700">Cópias</label>
-            <input type="number" min={1} max={20} value={copies} onChange={(event) => setCopies(Math.max(1, Math.min(20, Number(event.target.value))))} className="input-base mt-1" />
+            <CustomNumberInput value={copies} onChange={setCopies} min={1} max={20} step={1} className="mt-1" />
           </div>
-          <div>
-            <label className="text-xs font-bold text-slate-700">Fundo</label>
-            <select value={background} onChange={(event) => setBackground(event.target.value as 'white' | 'transparent')} className="input-base mt-1">
-              <option value="white">Branco</option>
-              <option value="transparent">Transparente</option>
-            </select>
+          <CustomSelect
+            label="Fundo"
+            value={background}
+            onChange={(val) => setBackground(val as 'white' | 'transparent')}
+            options={[
+              { value: 'white', label: 'Branco' },
+              { value: 'transparent', label: 'Transparente' },
+            ]}
+          />
+          <div className="pt-1">
+            <CustomSwitch
+              checked={cutOutline}
+              onChange={setCutOutline}
+              label="Contorno de recorte"
+            />
           </div>
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-            <input type="checkbox" checked={cutOutline} onChange={(event) => setCutOutline(event.target.checked)} className="accent-brand-600" />
-            Contorno de recorte
-          </label>
 
           {lowResolution && (
             <div className="flex gap-2 p-3 rounded-xl border border-amber-200 bg-amber-50 text-[11px] text-amber-800">

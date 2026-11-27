@@ -146,3 +146,34 @@
 - [x] Criação do painel administrativo de solicitações com busca, filtros, edição, valor, situações, anotações, histórico, link de conversa manual, imagem privada, arquivamento preservador e conversão para pedido (src/components/storefront/CustomQuoteRequestsPage.tsx e src/services/storefrontService.ts)
 - [x] Integração da URL pública, rota administrativa e entradas nos menus desktop e móvel, com acesso protegido pelo controle administrativo existente (src/App.tsx, src/routes.ts, src/components/layout/Sidebar.tsx e src/components/layout/MobileNav.tsx)
 - [x] Verificação estática concluída sem diagnósticos TypeScript nos oito módulos integrados; a validação ao vivo depende da aplicação do esquema no Supabase e a inspeção visual não pôde ser feita nesta sessão
+
+- [x] Inclusão aditiva da coluna de limite de tentativas (ai_fallback_max_attempts) na tabela api_keys do esquema global parte 3 (supabase/migrations/supabase_global_part3.sql)
+- [x] Suporte completo à API Groq com modelo contingente e validação JSON Schema na Edge Function ai-product-builder, mantendo credenciais protegidas em api_keys (supabase/functions/ai-product-builder/index.ts)
+- [x] Atualização da tela de Configuração da IA com status independente de Gemini e Groq, campo de chave Groq e limite de tentativas customizável com persistência no Supabase (src/components/assistant/CreateAiProductPanel.tsx e src/services/aiProductBuilderService.ts)
+- [x] Implementação de tentativas alternadas resilientes com intervalo randômico de 5 a 10s entre falhas e mensagens de progresso sem perda do texto preenchido (src/components/assistant/CreateAiProductPanel.tsx)
+- [x] Registro da resolução técnica incremental sobre a contingência e resiliência com Groq na base de conhecimento (documentation/continuous_learning_skills.md)
+- [x] Criação do componente CustomNumberInput com botões de incremento/decremento, limites e suporte a unidades (src/components/ui/CustomNumberInput.tsx)
+- [x] Ampliação dos modelos Groq suportados (Llama 3.3 70B, Llama 3.1 8B, GPT OSS 120B e Mixtral 8x7B) na Edge Function ai-product-builder e serviço frontend (supabase/functions/ai-product-builder/index.ts e src/services/aiProductBuilderService.ts)
+- [x] Inclusão de CustomSelect para escolha do modelo Groq na tela de Configuração da IA (src/components/assistant/CreateAiProductPanel.tsx)
+- [x] Substituição de campos numéricos brutos da prévia por CurrencyInput, PercentInput e CustomNumberInput (src/components/assistant/CreateAiProductPanel.tsx)
+- [x] Erradicação total de elementos <select> nativos do navegador em todas as páginas e modais, substituídos por CustomSelect (A4PrintPreparationModal, ArtPromptPage, CreateArtPromptModal, CalculatorPage, ClientsPage e StoreProductsPage)
+- [x] Substituição de inputs numéricos restantes em formulários de orçamento e vitrine por CustomNumberInput (CustomQuoteRequestForm, CustomQuoteRequestsPage, StoreProductsPage e StorefrontPage)
+- [x] Registro do aprendizado contínuo no Registro 17 da base de conhecimento (documentation/continuous_learning_skills.md)
+- [x] Alinhamento perfeito pelo topo dos campos de entrada e seletores na Configuração da IA (CreateAiProductPanel.tsx e CustomSelect.tsx)
+- [x] Padronização das classes e alturas dos rótulos de CustomSelect para eliminar qualquer assimetria com inputs de texto e senha (src/components/ui/CustomSelect.tsx)
+- [x] Identificação e tratamento claro para a atualização pendente da Edge Function ai-product-builder no Supabase (src/services/supabaseFunctionErrors.ts)
+- [x] Registro do aprendizado contínuo no Registro 18 da base de conhecimento (documentation/continuous_learning_skills.md)
+- [x] Inclusão aditiva da coluna ai_primary_provider na tabela api_keys em supabase_global_part3.sql
+- [x] Estabilização e extensão da Edge Function ai-product-builder e serviço frontend para gerenciar e persistir o provedor principal e fallback
+- [x] Criação da seção completa "Configurações dos Provedores de IA" em Configurações & Central de Backup (src/components/settings/SettingsPage.tsx)
+- [x] Remoção integral dos controles técnicos de configuração da tela "Criar Produto com IA", mantendo a geração transparente com alternância automática (src/components/assistant/CreateAiProductPanel.tsx)
+- [x] Registro da centralização de IA no Registro 19 da base de conhecimento (documentation/continuous_learning_skills.md)
+- [x] Correção do erro de sintaxe do Vite/Babel em CreateAiProductPanel.tsx com remoção de bloco duplicado
+- [x] Eliminação de quebra de linha no botão Salvar Preferências com abreviação, whitespace-nowrap e shrink-0 (src/components/settings/SettingsPage.tsx)
+- [x] Aplicação de proteção contra quebra de linha (whitespace-nowrap) nos botões de salvar chaves Gemini e Groq (src/components/settings/SettingsPage.tsx)
+- [x] Registro do aprendizado contínuo no Registro 20 da base técnica (documentation/continuous_learning_skills.md)
+
+
+
+
+

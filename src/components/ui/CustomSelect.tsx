@@ -45,8 +45,8 @@ export function CustomSelect({
   }, []);
 
   return (
-    <div className={`relative flex flex-col gap-1.5 ${className}`} ref={containerRef}>
-      {label && <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{label}</label>}
+    <div className={`relative flex flex-col ${className}`} ref={containerRef}>
+      {label && <label className="mb-1 block text-xs font-bold text-slate-700">{label}</label>}
 
       <button
         type="button"

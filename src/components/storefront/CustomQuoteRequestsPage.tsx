@@ -4,6 +4,7 @@ import { CustomDateInput } from '../ui/CustomDateInput';
 import { CustomModal } from '../ui/CustomModal';
 import { CurrencyInput } from '../ui/CurrencyInput';
 import { CustomSelect } from '../ui/CustomSelect';
+import { CustomNumberInput } from '../ui/CustomNumberInput';
 import { useToast } from '../ui/Toast';
 import {
   archiveCustomQuoteRequest,
@@ -213,7 +214,20 @@ export function CustomQuoteRequestsPage({ onOpenOrders }: { onOpenOrders?: () =>
           <section className="grid gap-3 sm:grid-cols-2"><InfoCell label="Cliente" value={selected.customerName} /><InfoCell label="WhatsApp" value={selected.customerWhatsapp} /><InfoCell label="Recebido em" value={formatDate(selected.createdAt)} /><InfoCell label="Produto selecionado" value={selected.productId || 'Produto personalizado'} /></section>
           <a href={whatsappLink(selected)} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white transition hover:bg-emerald-700"><MessageCircle className="h-4 w-4" /> Abrir conversa no WhatsApp <ExternalLink className="h-3.5 w-3.5" /></a>
 
-          <div className="grid gap-4 sm:grid-cols-2"><div><label htmlFor="quote-admin-product" className="mb-1.5 block text-xs font-bold text-slate-700">Produto desejado</label><input id="quote-admin-product" value={draft.productName} maxLength={160} onChange={(event) => setDraftField('productName', event.target.value)} className="input-base" /></div><div><label htmlFor="quote-admin-quantity" className="mb-1.5 block text-xs font-bold text-slate-700">Quantidade</label><input id="quote-admin-quantity" type="number" min={1} max={9999} value={draft.quantity} onChange={(event) => setDraftField('quantity', Number(event.target.value) || 1)} className="input-base" /></div></div>
+          <div className="grid gap-4 sm:grid-cols-2 items-end">
+            <div><label htmlFor="quote-admin-product" className="mb-1.5 block text-xs font-bold text-slate-700">Produto desejado</label><input id="quote-admin-product" value={draft.productName} maxLength={160} onChange={(event) => setDraftField('productName', event.target.value)} className="input-base" /></div>
+            <div>
+              <label htmlFor="quote-admin-quantity" className="mb-1.5 block text-xs font-bold text-slate-700">Quantidade</label>
+              <CustomNumberInput
+                value={draft.quantity}
+                onChange={(val) => setDraftField('quantity', val)}
+                min={1}
+                max={9999}
+                step={1}
+                ariaLabel="Quantidade"
+              />
+            </div>
+          </div>
           <div><label htmlFor="quote-admin-idea" className="mb-1.5 block text-xs font-bold text-slate-700">Descrição da ideia</label><textarea id="quote-admin-idea" rows={4} maxLength={5000} value={draft.idea} onChange={(event) => setDraftField('idea', event.target.value)} className="input-base resize-none" /></div>
           <div className="grid gap-4 sm:grid-cols-2"><div><label htmlFor="quote-admin-material" className="mb-1.5 block text-xs font-bold text-slate-700">Material</label><input id="quote-admin-material" value={draft.material} maxLength={500} onChange={(event) => setDraftField('material', event.target.value)} className="input-base" /></div><div><label htmlFor="quote-admin-dimensions" className="mb-1.5 block text-xs font-bold text-slate-700">Tamanho ou dimensões</label><input id="quote-admin-dimensions" value={draft.dimensions} maxLength={500} onChange={(event) => setDraftField('dimensions', event.target.value)} className="input-base" /></div></div>
           <div className="grid gap-4 sm:grid-cols-2"><div><label htmlFor="quote-admin-colors" className="mb-1.5 block text-xs font-bold text-slate-700">Cores ou tema</label><input id="quote-admin-colors" value={draft.colors} maxLength={500} onChange={(event) => setDraftField('colors', event.target.value)} className="input-base" /></div><div><label htmlFor="quote-admin-personalizations" className="mb-1.5 block text-xs font-bold text-slate-700">Personalização</label><input id="quote-admin-personalizations" value={draft.personalizations} maxLength={1500} onChange={(event) => setDraftField('personalizations', event.target.value)} className="input-base" /></div></div>

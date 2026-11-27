@@ -4,10 +4,17 @@ const API_KEY_TABLE = 'api_keys';
 const GEMINI_API_KEY_NAME = 'gemini_product_creator_v1';
 const GROQ_API_KEY_NAME = 'groq_product_creator_v1';
 const DEFAULT_MODEL = 'gemini-3.1-pro';
-const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
+const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
 const DEFAULT_FALLBACK_MAX_ATTEMPTS = 4;
 const MIN_FALLBACK_MAX_ATTEMPTS = 2;
 const MAX_FALLBACK_MAX_ATTEMPTS = 6;
+
+const GROQ_SUPPORTED_MODELS: Record<string, string> = {
+  'llama-3.3-70b-versatile': 'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant': 'llama-3.1-8b-instant',
+  'openai/gpt-oss-120b': 'openai/gpt-oss-120b',
+  'mixtral-8x7b-32768': 'mixtral-8x7b-32768',
+};
 
 const MODEL_IDS: Record<string, string> = {
   'gemini-3.1-pro': 'gemini-3.1-pro-preview',
@@ -65,12 +72,19 @@ function selectedModel(value: unknown): string {
     : DEFAULT_MODEL;
 }
 
+function selectedGroqModel(value: unknown): string {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(GROQ_SUPPORTED_MODELS, value)
+    ? value
+    : DEFAULT_GROQ_MODEL;
+}
+
 type AiProvider = 'gemini' | 'groq';
 
 interface StoredAiProviderKey {
   apiKey: string;
   modelName: string;
   fallbackMaxAttempts: number;
+  primaryProvider: AiProvider;
 }
 
 function normalizeFallbackMaxAttempts(value: unknown): number {
@@ -85,7 +99,7 @@ async function readStoredKey(
 ): Promise<StoredAiProviderKey | null> {
   const isGemini = provider === 'gemini';
   const { data, error } = await admin.from(API_KEY_TABLE)
-    .select('api_key,model_name,provider,ai_fallback_max_attempts')
+    .select('api_key,model_name,provider,ai_fallback_max_attempts,ai_primary_provider')
     .eq('key_name', isGemini ? GEMINI_API_KEY_NAME : GROQ_API_KEY_NAME)
     .eq('provider', isGemini ? 'google_gemini' : 'groq')
     .eq('is_active', true)
@@ -97,8 +111,9 @@ async function readStoredKey(
   if (!data || typeof data.api_key !== 'string' || !data.api_key.trim()) return null;
   return {
     apiKey: data.api_key.trim(),
-    modelName: isGemini ? selectedModel(data.model_name) : (typeof data.model_name === 'string' && data.model_name.trim() ? data.model_name.trim() : DEFAULT_GROQ_MODEL),
+    modelName: isGemini ? selectedModel(data.model_name) : selectedGroqModel(data.model_name),
     fallbackMaxAttempts: normalizeFallbackMaxAttempts(data.ai_fallback_max_attempts),
+    primaryProvider: data.ai_primary_provider === 'groq' ? 'groq' : 'gemini',
   };
 }
 
@@ -110,6 +125,7 @@ async function readBuilderConfiguration(admin: Awaited<ReturnType<typeof require
   return {
     gemini,
     groq,
+    primaryProvider: gemini?.primaryProvider ?? groq?.primaryProvider ?? 'gemini',
     fallbackMaxAttempts: gemini?.fallbackMaxAttempts ?? groq?.fallbackMaxAttempts ?? DEFAULT_FALLBACK_MAX_ATTEMPTS,
   };
 }
@@ -120,10 +136,27 @@ async function getBuilderStatus(admin: Awaited<ReturnType<typeof requireAdminist
     configured: Boolean(configuration.gemini || configuration.groq),
     geminiConfigured: Boolean(configuration.gemini),
     groqConfigured: Boolean(configuration.groq),
+    primaryProvider: configuration.primaryProvider,
     modelName: configuration.gemini?.modelName ?? DEFAULT_MODEL,
     groqModelName: configuration.groq?.modelName ?? DEFAULT_GROQ_MODEL,
     fallbackMaxAttempts: configuration.fallbackMaxAttempts,
   };
+}
+
+async function synchronizeAiSettings(
+  admin: Awaited<ReturnType<typeof requireAdministrator>>['admin'],
+  fallbackMaxAttempts: number,
+  primaryProvider: AiProvider,
+) {
+  const { error } = await admin.from(API_KEY_TABLE)
+    .update({ 
+      ai_fallback_max_attempts: fallbackMaxAttempts,
+      ai_primary_provider: primaryProvider,
+      updated_at: new Date().toISOString()
+    })
+    .in('key_name', [GEMINI_API_KEY_NAME, GROQ_API_KEY_NAME])
+    .eq('is_active', true);
+  if (error) throw new FunctionError(502, 'Não foi possível sincronizar as preferências de IA entre os provedores.');
 }
 
 function parseJsonResponse(value: string): Record<string, unknown> {
@@ -273,6 +306,7 @@ async function saveApiKey(
 
   const modelName = selectedModel(body.modelName);
   const fallbackMaxAttempts = normalizeFallbackMaxAttempts(body.fallbackMaxAttempts);
+  const primaryProvider: AiProvider = body.primaryProvider === 'groq' ? 'groq' : 'gemini';
   const { data: existing, error: lookupError } = await admin.from(API_KEY_TABLE)
     .select('key_name')
     .eq('key_name', GEMINI_API_KEY_NAME)
@@ -287,6 +321,7 @@ async function saveApiKey(
     api_key: apiKey,
     model_name: modelName,
     ai_fallback_max_attempts: fallbackMaxAttempts,
+    ai_primary_provider: primaryProvider,
     is_active: true,
     updated_at: new Date().toISOString(),
   };
@@ -294,6 +329,7 @@ async function saveApiKey(
     ? await admin.from(API_KEY_TABLE).update(values).eq('key_name', GEMINI_API_KEY_NAME)
     : await admin.from(API_KEY_TABLE).insert({ ...values, created_at: values.updated_at });
   if (error) throw new FunctionError(502, 'Não foi possível salvar a chave Gemini em api_keys. Confira o esquema e tente novamente.');
+  await synchronizeAiSettings(admin, fallbackMaxAttempts, primaryProvider);
 
   return getBuilderStatus(admin);
 }
@@ -315,12 +351,15 @@ async function saveGroqApiKey(
     .maybeSingle();
   if (lookupError) throw new FunctionError(502, 'Não foi possível acessar a tabela api_keys. Aplique a atualização do esquema e tente novamente.');
 
+  const fallbackMaxAttempts = normalizeFallbackMaxAttempts(body.fallbackMaxAttempts);
+  const primaryProvider: AiProvider = body.primaryProvider === 'groq' ? 'groq' : 'gemini';
   const values = {
     key_name: GROQ_API_KEY_NAME,
     provider: 'groq',
     api_key: apiKey,
-    model_name: DEFAULT_GROQ_MODEL,
-    ai_fallback_max_attempts: normalizeFallbackMaxAttempts(body.fallbackMaxAttempts),
+    model_name: selectedGroqModel(body.modelName),
+    ai_fallback_max_attempts: fallbackMaxAttempts,
+    ai_primary_provider: primaryProvider,
     is_active: true,
     updated_at: new Date().toISOString(),
   };
@@ -328,7 +367,45 @@ async function saveGroqApiKey(
     ? await admin.from(API_KEY_TABLE).update(values).eq('key_name', GROQ_API_KEY_NAME)
     : await admin.from(API_KEY_TABLE).insert({ ...values, created_at: values.updated_at });
   if (error) throw new FunctionError(502, 'Não foi possível salvar a chave Groq em api_keys. Confira o esquema e tente novamente.');
+  await synchronizeAiSettings(admin, values.ai_fallback_max_attempts, primaryProvider);
 
+  return getBuilderStatus(admin);
+}
+
+async function saveAiPreferences(
+  admin: Awaited<ReturnType<typeof requireAdministrator>>['admin'],
+  body: Record<string, unknown>,
+) {
+  const rawAttempts = typeof body.fallbackMaxAttempts === 'number' ? Math.floor(body.fallbackMaxAttempts) : Number.NaN;
+  if (!Number.isInteger(rawAttempts) || rawAttempts < MIN_FALLBACK_MAX_ATTEMPTS || rawAttempts > MAX_FALLBACK_MAX_ATTEMPTS) {
+    throw new FunctionError(400, `O limite deve ficar entre ${MIN_FALLBACK_MAX_ATTEMPTS} e ${MAX_FALLBACK_MAX_ATTEMPTS} tentativas.`);
+  }
+  const primaryProvider: AiProvider = body.primaryProvider === 'groq' ? 'groq' : 'gemini';
+
+  if (body.modelName && typeof body.modelName === 'string') {
+    await admin.from(API_KEY_TABLE)
+      .update({ model_name: selectedModel(body.modelName), updated_at: new Date().toISOString() })
+      .eq('key_name', GEMINI_API_KEY_NAME);
+  }
+
+  if (body.groqModelName && typeof body.groqModelName === 'string') {
+    await admin.from(API_KEY_TABLE)
+      .update({ model_name: selectedGroqModel(body.groqModelName), updated_at: new Date().toISOString() })
+      .eq('key_name', GROQ_API_KEY_NAME);
+  }
+
+  const { data, error } = await admin.from(API_KEY_TABLE)
+    .update({ 
+      ai_fallback_max_attempts: rawAttempts,
+      ai_primary_provider: primaryProvider,
+      updated_at: new Date().toISOString() 
+    })
+    .in('key_name', [GEMINI_API_KEY_NAME, GROQ_API_KEY_NAME])
+    .eq('is_active', true)
+    .select('key_name');
+
+  if (error) throw new FunctionError(502, 'Não foi possível salvar as preferências em api_keys.');
+  if (!data?.length) throw new FunctionError(409, 'Configure pelo menos um provedor antes de salvar as preferências.');
   return getBuilderStatus(admin);
 }
 
@@ -373,7 +450,7 @@ async function generateProduct(
   const pricingContext = normalizePricingContext(body.pricingContext);
   const modelId = provider === 'gemini'
     ? MODEL_IDS[configuration.modelName]
-    : (configuration.modelName === DEFAULT_GROQ_MODEL ? configuration.modelName : DEFAULT_GROQ_MODEL);
+    : selectedGroqModel(configuration.modelName);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
 
@@ -475,11 +552,11 @@ Deno.serve(async (request) => {
     if (body.action === 'save_groq_key') {
       return response(request, await saveGroqApiKey(admin, body));
     }
-    if (body.action === 'save_fallback_attempts') {
-      return response(request, await saveFallbackAttempts(admin, body));
+    if (body.action === 'save_fallback_attempts' || body.action === 'save_ai_preferences') {
+      return response(request, await saveAiPreferences(admin, body));
     }
     if (body.action === 'generate') {
-      return response(request, { product: await generateProduct(admin, body) });
+      return response(request, await generateProduct(admin, body));
     }
     throw new FunctionError(400, 'Ação do Criador de Produtos com IA desconhecida.');
   } catch (error) {

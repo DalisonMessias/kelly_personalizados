@@ -124,3 +124,65 @@ Este documento centraliza e documenta todas as soluções técnicas, correções
 - **Risco identificado:** Permitir leitura pública direta da tabela exporia dados pessoais; armazenar imagens em URLs públicas ou apagar registros eliminaria privacidade e histórico; converter sem bloqueio poderia duplicar pedidos.
 - **Solução aplicada:** A tabela fica sem acesso direto para visitantes; o envio passa por função validada, a imagem usa o bucket privado existente, as operações administrativas verificam a conta autorizada, a remoção é arquivamento lógico e a conversão bloqueia a linha e devolve o pedido existente quando chamada novamente.
 - **Prevenção:** Para fluxos públicos ligados ao painel, restringir a escrita a funções validadas, manter dados pessoais fora das leituras públicas, usar armazenamento privado para arquivos e tornar conversões transacionais e idempotentes.
+
+---
+
+### Registro 16: Alternância resiliente de IA (Gemini e Groq) no Criador de Produtos
+
+- **Contexto:** Durante instabilidade ou esgotamento de cota do provedor principal (Gemini), a geração de cadastros estruturados de produtos podia falhar e frustrar a criação no ateliê.
+- **Causa identificada:** Havia apenas um provedor configurável e a chamada falhava de forma imediata sem contingência ou tempo de espera para recuperação de taxa.
+- **Solução aplicada:** Foi integrada a API Groq com modelo compatível (`openai/gpt-oss-120b`) e esquema restrito JSON. As credenciais de ambos os provedores permanecem protegidas na tabela `api_keys` no Supabase e nunca chegam ao navegador. No frontend, foi implementada fila com tentativas alternadas (configurável de 2 a 6 tentativas), espera aleatória de 5 a 10 segundos entre falhas, mensagens transparentes de progresso sem limpar a descrição digitada pelo usuário e desempacotamento consistente do resultado na Edge Function.
+- **Prevenção:** Proteger todas as chaves de provedores de IA no backend/Edge Function, validar estritamente a saída estruturada e fornecer fallback transparente com temporização para evitar bloqueios por concorrência.
+
+---
+
+### Registro 17: Catálogo de Modelos Groq e Padronização Completa de Controles UI (Select e Number)
+
+- **Contexto:** O provedor Groq possuía apenas um modelo fixo (`openai/gpt-oss-120b`) e interfaces do sistema ainda utilizavam tags `<select>` nativas do navegador e campos numéricos comuns `<input type="number">`.
+- **Causa identificada:** A Edge Function não aceitava outros modelos Groq e partes das telas não utilizavam componentes com estilo e acessibilidade padronizados.
+- **Solução aplicada:**
+  1. Criado o componente reutilizável `CustomNumberInput` em `src/components/ui/CustomNumberInput.tsx`, com botões de incremento/decremento, máscara decimal, valores mínimos/máximos e suporte a unidades (`min`, `mm`, etc.).
+  2. Expandida a Edge Function `ai-product-builder` para suportar `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `openai/gpt-oss-120b` e `mixtral-8x7b-32768`.
+  3. Adicionado seletor `CustomSelect` para o modelo de contingência Groq em `CreateAiProductPanel.tsx`, permitindo à artesã selecionar o modelo desejado.
+  4. Substituição de todas as ocorrências de `<select>` nativo e inputs numéricos em modais e formulários por `CustomSelect`, `CurrencyInput`, `PercentInput` e `CustomNumberInput`.
+- **Prevenção:** Utilizar sempre componentes customizados da pasta `src/components/ui/` para manter a consistência visual do ateliê e nunca permitir tags nativas com controles brutos do sistema operacional.
+
+---
+
+### Registro 18: Alinhamento de Formulários de IA e Tratamento da Edge Function Desatualizada
+
+- **Contexto:** Os campos de entrada de chaves e os seletores customizados `CustomSelect` ficavam com leves desalinhamentos verticais devido à diferença entre as classes dos rótulos e gaps. Além disso, ao tentar salvar a chave do Groq com a versão publicada anterior no Supabase, a resposta era "Ação do Criador de Produtos com IA desconhecida".
+- **Causa identificada:** O `CustomSelect` utilizava `gap-1.5` e caixa alta com tracking amplo no rótulo, enquanto os inputs comuns usavam `mb-1 block text-xs font-bold text-slate-700`. No backend, a versão remota da Edge Function no projeto Supabase ainda não foi republicada com a nova ação `save_groq_key`.
+- **Solução aplicada:**
+  1. Padronizado o estilo do rótulo do `CustomSelect` para `mb-1 block text-xs font-bold text-slate-700`, alinhando os containers por `sm:items-start`.
+  2. Aprimorado o módulo `supabaseFunctionErrors.ts` para capturar a resposta de ação desconhecida e instruir com clareza o comando de publicação da função atualizada (`npm run supabase:deploy-ai-product-builder`).
+- **Prevenção:** Sempre alinhar a tipografia e margens de rótulos de componentes formulário customizados com os padrões globais do formulário e fornecer mensagens contextuais transparentes para funções de nuvem que aguardam novo deploy.
+
+---
+
+### Registro 19: Centralização das Configurações dos Provedores de IA
+
+- **Contexto:** O bloco de configurações de IA (chaves Gemini e Groq, modelos e limites de tentativas) ficava visível diretamente dentro da tela operacional "Criar Produto com IA", misturando parametrização técnica com a rotina de criação de produtos.
+- **Causa identificada:** Necessidade de separar a responsabilidade administrativa de parametrização da tela de operação criativa.
+- **Solução aplicada:**
+  1. Adicionada a coluna aditiva `ai_primary_provider` na tabela `api_keys` em `supabase_global_part3.sql` para persistir a prioridade entre Gemini e Groq.
+  2. Criada a seção dedicada **"Configurações dos Provedores de IA"** dentro de `SettingsPage.tsx` ("Configurações & Central de Backup"), contendo seleção de provedor principal, chaves Gemini e Groq protegidas, seleção de modelos e limite de tentativas alternadas.
+  3. Removidos todos os formulários e campos de configuração de `CreateAiProductPanel.tsx`, que agora consome de forma transparente o status e a ordem de contingência configurada no ateliê.
+- **Prevenção:** Manter painéis operacionais focados no fluxo de trabalho e concentrar todas as chaves e integrações na Central de Configurações do sistema.
+
+---
+
+### Registro 20: Eliminação de Quebra de Linha em Botões e Correção de Sintaxe no Criador de Produtos
+
+- **Contexto:** O botão "Salvar Preferências de IA" na Central de Configurações quebrava em duas linhas ("Salvar Preferências de / IA"). Além disso, um bloco duplicado após o `handleGenerate` em `CreateAiProductPanel.tsx` causava erro de análise do Babel/Vite (`Unexpected token`).
+- **Causa identificada:** A largura do container flex permitia a quebra do texto do botão por falta de `whitespace-nowrap` e `shrink-0`. No `CreateAiProductPanel.tsx`, uma edição anterior manteve uma cauda duplicada da função de geração.
+- **Solução aplicada:**
+  1. Removido o trecho duplicado em `CreateAiProductPanel.tsx`, normalizando a sintaxe e compilando sem erros.
+  2. Texto do botão abreviado para "Salvar Preferências", aplicado `whitespace-nowrap`, `min-h-10`, padding consistente e `shrink-0` em `SettingsPage.tsx`.
+  3. Aplicado `whitespace-nowrap` também nos botões de salvar chaves Gemini e Groq.
+- **Prevenção:** Sempre utilizar `whitespace-nowrap` em botões de ação com textos de 2 a 3 palavras para garantir exibição em linha única em todas as resoluções.
+
+
+
+
+

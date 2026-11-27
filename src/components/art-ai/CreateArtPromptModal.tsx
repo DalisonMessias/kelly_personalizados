@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, Copy, RefreshCw, Edit3, ExternalLink, WandSparkles } from 'lucide-react';
 import { CustomModal } from '../ui/CustomModal';
 import { CustomSwitch } from '../ui/CustomSwitch';
+import { CustomSelect } from '../ui/CustomSelect';
 import { GeneratedArtPrompt } from '../../types';
 
 interface CreateArtPromptModalProps {
@@ -101,7 +102,19 @@ export function CreateArtPromptModal({ isOpen, onClose, onPromptReady }: CreateA
               <div><label className="text-xs font-bold text-slate-700">Idade ou texto</label><input value={ageOrText} onChange={(event) => setAgeOrText(event.target.value)} className="input-base mt-1" placeholder="Ex: 5 anos" /></div>
               <div><label className="text-xs font-bold text-slate-700">Cores desejadas</label><input value={colors} onChange={(event) => setColors(event.target.value)} className="input-base mt-1" placeholder="Ex: rosa, lilás e dourado" /></div>
               <div><label className="text-xs font-bold text-slate-700">Estilo visual</label><input value={style} onChange={(event) => setStyle(event.target.value)} className="input-base mt-1" placeholder="Ex: infantil delicado" /></div>
-              <div><label className="text-xs font-bold text-slate-700">Formato</label><select value={format} onChange={(event) => setFormat(event.target.value)} className="input-base mt-1"><option value="">Não informado</option><option value="redondo">Redondo</option><option value="quadrado">Quadrado</option><option value="retangular">Retangular</option><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></div>
+              <CustomSelect
+                label="Formato"
+                value={format}
+                onChange={setFormat}
+                options={[
+                  { value: '', label: 'Não informado' },
+                  { value: 'redondo', label: 'Redondo' },
+                  { value: 'quadrado', label: 'Quadrado' },
+                  { value: 'retangular', label: 'Retangular' },
+                  { value: 'vertical', label: 'Vertical' },
+                  { value: 'horizontal', label: 'Horizontal' },
+                ]}
+              />
               <div><label className="text-xs font-bold text-slate-700">Tamanho ou dimensões</label><input value={dimensions} onChange={(event) => setDimensions(event.target.value)} className="input-base mt-1" placeholder="Ex: 15 cm ou folha A4" /></div>
               <div><label className="text-xs font-bold text-slate-700">Quantidade de elementos</label><input value={elementCount} onChange={(event) => setElementCount(event.target.value)} className="input-base mt-1" placeholder="Ex: vários adesivos" /></div>
               <div><label className="text-xs font-bold text-slate-700">Instruções adicionais</label><input value={instructions} onChange={(event) => setInstructions(event.target.value)} className="input-base mt-1" placeholder="Ex: fundo transparente" /></div>

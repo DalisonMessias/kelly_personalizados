@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, ImagePlus, LoaderCircle, MessageCi
 import { CustomDateInput } from '../ui/CustomDateInput';
 import { CustomModal } from '../ui/CustomModal';
 import { CustomSelect } from '../ui/CustomSelect';
+import { CustomNumberInput } from '../ui/CustomNumberInput';
 import { useToast } from '../ui/Toast';
 import {
   createStorefrontRequestId,
@@ -171,8 +172,18 @@ export function CustomQuoteRequestForm({ products, initialProductId, onBack }: C
             <div><label htmlFor="quote-whatsapp" className="mb-1.5 block text-xs font-bold text-slate-700">WhatsApp com DDD *</label><input id="quote-whatsapp" type="tel" inputMode="tel" autoComplete="tel" value={whatsapp} onChange={(event) => setWhatsapp(formatPhone(event.target.value))} maxLength={22} className="input-base" placeholder="(11) 99999-9999" /></div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div><label htmlFor="quote-quantity" className="mb-1.5 block text-xs font-bold text-slate-700">Quantidade desejada *</label><input id="quote-quantity" type="number" min={1} max={9999} step={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} className="input-base" /></div>
+          <div className="grid gap-4 sm:grid-cols-2 items-end">
+            <div>
+              <label htmlFor="quote-quantity" className="mb-1.5 block text-xs font-bold text-slate-700">Quantidade desejada *</label>
+              <CustomNumberInput
+                value={Number(quantity) || 1}
+                onChange={(val) => setQuantity(String(val))}
+                min={1}
+                max={9999}
+                step={1}
+                ariaLabel="Quantidade desejada"
+              />
+            </div>
             <CustomDateInput label="Prazo desejado (opcional)" value={desiredDeadline} onChange={setDesiredDeadline} placeholder="Escolher uma data" />
           </div>
 

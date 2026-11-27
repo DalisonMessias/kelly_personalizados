@@ -1274,6 +1274,10 @@ grant all on table public.api_keys to service_role;
 alter table public.api_keys
   add column if not exists ai_fallback_max_attempts integer not null default 4;
 
+-- Configuração aditiva do provedor principal preferido (gemini ou groq).
+alter table public.api_keys
+  add column if not exists ai_primary_provider text not null default 'gemini';
+
 -- Solicitações públicas de orçamento, separadas dos pedidos já confirmados.
 create table if not exists public.kelly_storefront_quote_requests_v1 (
   id uuid primary key,

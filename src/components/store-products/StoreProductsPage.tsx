@@ -32,6 +32,7 @@ import { PercentInput } from '../ui/PercentInput';
 import { CustomModal } from '../ui/CustomModal';
 import { CustomSelect } from '../ui/CustomSelect';
 import { CustomSwitch } from '../ui/CustomSwitch';
+import { CustomNumberInput } from '../ui/CustomNumberInput';
 import { getStoreProductImageUrl, uploadStoreProductImages } from '../../services/storefrontService';
 import { useToast } from '../ui/Toast';
 
@@ -353,10 +354,20 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
       {adminProducts.length > 0 && (
         <div className="card-base p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div><h3 className="text-sm font-black text-slate-800">Criar catálogo a partir da calculadora</h3><p className="text-xs text-slate-500">Reutilize um serviço já calculado sem misturar histórico e catálogo futuro.</p></div>
-          <select className="input-base sm:max-w-xs" defaultValue="" onChange={(event) => { const source = adminProducts.find((product) => product.id === event.target.value); if (source) createFromAdminProduct(source); event.target.value = ''; }}>
-            <option value="" disabled>Selecione um produto calculado</option>
-            {adminProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-          </select>
+          <div className="w-full sm:w-72">
+            <CustomSelect
+              value=""
+              onChange={(val) => {
+                const source = adminProducts.find((product) => product.id === val);
+                if (source) createFromAdminProduct(source);
+              }}
+              placeholder="Selecione um produto calculado"
+              options={[
+                { value: '', label: 'Selecione um produto calculado' },
+                ...adminProducts.map((product) => ({ value: product.id, label: product.name })),
+              ]}
+            />
+          </div>
         </div>
       )}
 
@@ -410,9 +421,9 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
                 {!products.some((product) => product.id === form.id) && <p className="mt-3 rounded-lg bg-white px-3 py-2 text-xs text-amber-700">Salve o produto e abra novamente o cadastro para liberar o envio de fotos.</p>}
                 {form.imageIds.length > 0 && <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{form.imageIds.map((imageId) => { const imageUrl = getStoreProductImageUrl(form.id, imageId); return <div key={imageId} className="relative aspect-square overflow-hidden rounded-xl border border-rose-100 bg-white">{imageUrl && <img src={imageUrl} alt="Foto do produto" className="h-full w-full object-cover" />}<button type="button" onClick={() => setForm((current) => ({ ...current, imageIds: current.imageIds.filter((id) => id !== imageId) }))} className="absolute inset-x-1 bottom-1 rounded-lg bg-white/95 px-2 py-1.5 text-[10px] font-bold text-rose-700 shadow" title="Remover da galeria">Remover da galeria</button></div>; })}</div>}
               </section>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                 <CustomSelect label="Categoria" value={form.category} onChange={(value) => setForm({ ...form, category: value })} options={categoryOptions} />
-                <div><label className="text-xs font-bold text-slate-700">Quantidade mínima</label><input type="number" min={1} value={form.minimumQuantity} onChange={(event) => setForm({ ...form, minimumQuantity: Math.max(1, Number(event.target.value)) })} className="input-base mt-1" /></div>
+                <div><label className="text-xs font-bold text-slate-700">Quantidade mínima</label><div className="mt-1"><CustomNumberInput value={form.minimumQuantity} onChange={(val) => setForm({ ...form, minimumQuantity: Math.max(1, val) })} min={1} max={99999} step={1} /></div></div>
               </div>
               <section className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Ficha técnica</h3>
@@ -422,7 +433,7 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
                   <div><label className="text-xs font-bold text-slate-700">Materiais utilizados</label><textarea value={(form.materials || []).join('\n')} onChange={(event) => setForm({ ...form, materials: event.target.value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean) })} className="input-base mt-1 resize-none" rows={3} /></div>
                   <div><label className="text-xs font-bold text-slate-700">Gramatura e especificações</label><textarea value={form.technicalSpecs || ''} onChange={(event) => setForm({ ...form, technicalSpecs: event.target.value })} className="input-base mt-1 resize-none" rows={3} /></div>
                   <div><label className="text-xs font-bold text-slate-700">Dimensões{form.aiSuggestedFields?.includes('dimensions') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><input value={form.dimensions || ''} onChange={(event) => setForm({ ...form, dimensions: event.target.value, aiSuggestedFields: (form.aiSuggestedFields || []).filter((field) => field !== 'dimensions') })} className="input-base mt-1" /></div>
-                  <div><label className="text-xs font-bold text-slate-700">Tempo estimado (minutos){form.aiSuggestedFields?.includes('estimatedProductionTime') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><input type="number" min="0" value={form.estimatedProductionTime} onChange={(event) => updateFinancialField('estimatedProductionTime', Number(event.target.value))} className="input-base mt-1" /></div>
+                  <div><label className="text-xs font-bold text-slate-700">Tempo estimado{form.aiSuggestedFields?.includes('estimatedProductionTime') && <span className="ml-1 font-medium text-brand-600">· Sugestão da IA</span>}</label><div className="mt-1"><CustomNumberInput value={form.estimatedProductionTime} onChange={(val) => updateFinancialField('estimatedProductionTime', val)} min={0} max={99999} step={5} unit="min" /></div></div>
                   <div><label className="text-xs font-bold text-slate-700">Orientações de personalização</label><textarea value={form.personalizationInstructions || ''} onChange={(event) => setForm({ ...form, personalizationInstructions: event.target.value })} className="input-base mt-1 resize-none" rows={2} /></div>
                   <div><label className="text-xs font-bold text-slate-700">Palavras-chave</label><textarea value={(form.keywords || []).join(', ')} onChange={(event) => setForm({ ...form, keywords: event.target.value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean) })} className="input-base mt-1 resize-none" rows={2} /></div>
                   <div><label className="text-xs font-bold text-slate-700">Informações adicionais</label><textarea value={form.additionalInfo || ''} onChange={(event) => setForm({ ...form, additionalInfo: event.target.value })} className="input-base mt-1 resize-none" rows={2} /></div>
@@ -453,9 +464,19 @@ export function StoreProductsPage({ onSendToCalculator }: StoreProductsPageProps
               <div className="flex items-center justify-between"><h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Personalizações</h3><button type="button" onClick={addPersonalization} className="text-xs font-bold text-brand-700">+ Adicionar opção</button></div>
               {form.personalizationOptions.map((option) => (
                 <div key={option.id} className="p-3 rounded-xl border border-pink-100 space-y-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
                     <input value={option.name} onChange={(event) => updatePersonalization(option.id, { name: event.target.value })} placeholder="Nome da opção" className="input-base" />
-                    <select value={option.type} onChange={(event) => updatePersonalization(option.id, { type: event.target.value as PersonalizationFieldType })} className="input-base"><option value="texto">Texto</option><option value="numero">Número</option><option value="selecao">Seleção</option><option value="multipla_escolha">Múltipla escolha</option><option value="sim_nao">Sim/não</option></select>
+                    <CustomSelect
+                      value={option.type}
+                      onChange={(val) => updatePersonalization(option.id, { type: val as PersonalizationFieldType })}
+                      options={[
+                        { value: 'texto', label: 'Texto' },
+                        { value: 'numero', label: 'Número' },
+                        { value: 'selecao', label: 'Seleção' },
+                        { value: 'multipla_escolha', label: 'Múltipla escolha' },
+                        { value: 'sim_nao', label: 'Sim/não' },
+                      ]}
+                    />
                   </div>
                   {(option.type === 'selecao' || option.type === 'multipla_escolha') && <input value={option.values.join(', ')} onChange={(event) => updatePersonalization(option.id, { values: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} placeholder="Valores separados por vírgula" className="input-base" />}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">

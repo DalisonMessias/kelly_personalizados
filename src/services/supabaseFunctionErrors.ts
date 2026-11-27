@@ -33,6 +33,10 @@ export async function getSupabaseFunctionErrorMessage(error: unknown, functionNa
     return 'A função “system-backup” publicada está desatualizada e ainda não reconhece esta ação. Publique a versão atualizada da função no Supabase e tente novamente. Os dados dos backups continuam preservados.';
   }
 
+  if (functionName === 'ai-product-builder' && /ação do criador de produtos com ia desconhecida/i.test(body?.error ?? body?.message ?? '')) {
+    return 'A função “ai-product-builder” publicada no Supabase está em uma versão anterior que ainda não inclui o suporte ao Groq. Publique a versão atualizada da função (npm run supabase:deploy-ai-product-builder) para ativar o salvamento.';
+  }
+
   if (failure.name === 'FunctionsFetchError' || /failed to send a request to the edge function/i.test(failure.message ?? '')) {
     return `Não foi possível alcançar a função “${functionName}”. Verifique a conexão e se ela está publicada no Supabase.`;
   }

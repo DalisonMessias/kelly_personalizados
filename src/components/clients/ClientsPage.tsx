@@ -37,6 +37,8 @@ import { CurrencyInput } from '../ui/CurrencyInput';
 import { PercentInput } from '../ui/PercentInput';
 import { CustomModal } from '../ui/CustomModal';
 import { CustomDateInput } from '../ui/CustomDateInput';
+import { CustomSelect } from '../ui/CustomSelect';
+import { CustomNumberInput } from '../ui/CustomNumberInput';
 import { useToast } from '../ui/Toast';
 import { CreateArtPromptModal } from '../art-ai/CreateArtPromptModal';
 import { A4PrintPreparationModal } from '../art-ai/A4PrintPreparationModal';
@@ -751,9 +753,16 @@ export function ClientsPage({ products, initialCustomerId, initialProduct, onNew
                   <button type="button" onClick={() => setQuoteToDelete(quote)} className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
-              <select value={quote.status} onChange={(event) => updateQuoteStatus(quote.id, event.target.value as QuoteStatus)} className="input-base py-2 text-xs sm:w-36">
-                {(Object.keys(statusLabels) as QuoteStatus[]).map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}
-              </select>
+              <div className="w-40">
+                <CustomSelect
+                  value={quote.status}
+                  onChange={(val) => updateQuoteStatus(quote.id, val as QuoteStatus)}
+                  options={(Object.keys(statusLabels) as QuoteStatus[]).map((status) => ({
+                    value: status,
+                    label: statusLabels[status],
+                  }))}
+                />
+              </div>
             </div>
           ))}
           {filteredQuotes.length === 0 && (
@@ -854,29 +863,51 @@ export function ClientsPage({ products, initialCustomerId, initialProduct, onNew
         <CustomModal isOpen={quoteEditorOpen} onClose={() => setQuoteEditorOpen(false)} title={editingQuoteId ? 'Editar orçamento' : 'Novo orçamento'} onConfirm={() => saveQuote()} confirmText="Salvar orçamento">
           <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
             <div>
-              <label className="text-xs font-bold text-slate-700">Cliente</label>
-              <select value={quoteCustomerId} onChange={(event) => setQuoteCustomerId(event.target.value)} className="input-base mt-1">
-                <option value="">Selecione um cliente</option>
-                {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
-              </select>
+              <CustomSelect
+                label="Cliente"
+                value={quoteCustomerId}
+                onChange={setQuoteCustomerId}
+                placeholder="Selecione um cliente"
+                options={[
+                  { value: '', label: 'Selecione um cliente' },
+                  ...customers.map((customer) => ({ value: customer.id, label: customer.name })),
+                ]}
+              />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-700">Itens do orçamento</span><button type="button" onClick={addCustomQuoteItem} className="text-xs font-bold text-brand-700">+ Item personalizado</button></div>
               {products.length > 0 && (
-                <select onChange={(event) => { const product = products.find((item) => item.id === event.target.value); if (product) addQuoteItemFromProduct(product); event.target.value = ''; }} className="input-base mb-3" defaultValue="">
-                  <option value="" disabled>Selecionar serviço cadastrado</option>
-                  {products.map((product) => <option key={product.id} value={product.id}>{product.name} — {formatCurrency(product.calculationResult?.finalSalePrice)}</option>)}
-                </select>
+                <div className="mb-3">
+                  <CustomSelect
+                    value=""
+                    onChange={(val) => {
+                      const product = products.find((item) => item.id === val);
+                      if (product) addQuoteItemFromProduct(product);
+                    }}
+                    placeholder="Selecionar serviço cadastrado"
+                    options={[
+                      { value: '', label: 'Selecionar serviço cadastrado' },
+                      ...products.map((product) => ({
+                        value: product.id,
+                        label: `${product.name} — ${formatCurrency(product.calculationResult?.finalSalePrice)}`,
+                      })),
+                    ]}
+                  />
+                </div>
               )}
 
               <div className="space-y-3">
                 {quoteItems.map((item) => (
                   <div key={item.id} className="p-3 rounded-xl border border-pink-100 bg-pink-50/30 space-y-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                       <input value={item.name} onChange={(event) => updateQuoteItem(item.id, { name: event.target.value })} placeholder="Nome do produto ou serviço" className="input-base sm:col-span-5" />
-                      <input value={item.quantity} onChange={(event) => updateQuoteItem(item.id, { quantity: Number(event.target.value) })} type="number" min={1} className="input-base sm:col-span-2" placeholder="Qtd." />
-                      <CurrencyInput value={item.unitPrice} onChange={(value) => updateQuoteItem(item.id, { unitPrice: value })} className="input-base sm:col-span-4" />
+                      <div className="sm:col-span-3">
+                        <CustomNumberInput value={item.quantity} onChange={(val) => updateQuoteItem(item.id, { quantity: val })} min={1} max={99999} step={1} />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <CurrencyInput value={item.unitPrice} onChange={(value) => updateQuoteItem(item.id, { unitPrice: value })} className="input-base" />
+                      </div>
                       <button type="button" onClick={() => removeQuoteItem(item.id)} className="sm:col-span-1 p-2 text-rose-500 hover:bg-rose-50 rounded-lg flex justify-center"><Trash2 className="w-4 h-4" /></button>
                     </div>
                     <input value={item.description} onChange={(event) => updateQuoteItem(item.id, { description: event.target.value })} placeholder="Descrição opcional" className="input-base" />
